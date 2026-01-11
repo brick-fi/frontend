@@ -252,7 +252,7 @@ export default function CreatePropertyPage() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="totalValue">Total Asset Value (USDC)</Label>
+                                <Label htmlFor="totalValue">Total Asset Value ($)</Label>
                                 <Input
                                     id="totalValue"
                                     type="number"
@@ -264,7 +264,7 @@ export default function CreatePropertyPage() {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="expectedMonthlyIncome">Expected Monthly Income (USDC)</Label>
+                                <Label htmlFor="expectedMonthlyIncome">Expected Monthly Income ($)</Label>
                                 <Input
                                     id="expectedMonthlyIncome"
                                     type="number"
@@ -293,11 +293,10 @@ export default function CreatePropertyPage() {
                                     />
                                     <label
                                         htmlFor="images"
-                                        className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer transition-all ${
-                                            uploadingImages
+                                        className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer transition-all ${uploadingImages
                                                 ? 'border-muted bg-muted/50 cursor-not-allowed'
                                                 : 'border-border hover:border-brand-green hover:bg-brand-green/5'
-                                        }`}
+                                            }`}
                                     >
                                         <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                             <Upload className={`w-10 h-10 mb-3 ${uploadingImages ? 'text-muted-foreground' : 'text-brand-green'}`} />
@@ -382,9 +381,9 @@ export default function CreatePropertyPage() {
                                 className="bg-brand-green text-black hover:bg-brand-green/90 w-full md:w-auto"
                             >
                                 {!address ? "Connect Wallet" :
-                                 uploadingImages ? "Uploading to IPFS..." :
-                                 isCreatingProperty || isWaitingForCreate ? "Creating on Blockchain..." :
-                                 "Create Property"}
+                                    uploadingImages ? "Uploading to IPFS..." :
+                                        isCreatingProperty || isWaitingForCreate ? "Creating on Blockchain..." :
+                                            "Create Property"}
                             </Button>
                         </div>
 
