@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useProperties } from "@/context/property-context"
+import { Property } from "@/data/properties"
 import { useRouter } from "next/navigation"
 import { useState, FormEvent } from "react"
 import { toast } from "sonner"
