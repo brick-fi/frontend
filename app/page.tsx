@@ -23,19 +23,30 @@ export default function Home() {
             The Future of Real Estate Investment
           </div>
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter text-white leading-[0.9] animate-in slide-in-from-bottom-8 fade-in duration-1000 delay-500">
-            OWN <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-green to-emerald-400">THE CITY</span><br />
-            BLOCK BY BLOCK
+            BE THE <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-green to-emerald-400">LANDLORD</span><br />
+            BY ONE CLICK
           </h1>
           <p className="text-xl md:text-2xl text-gray-300 max-w-2xl mx-auto leading-relaxed font-light animate-in slide-in-from-bottom-8 fade-in duration-1000 delay-700">
-            Premium fractional ownership powered by DeFi. <br />
-            Start building your property empire from <span className="text-brand-green font-bold">$50</span>.
+            Easiest fractional ownership, powered by DeFi. <br />
+            Start building your property empire from just <span className="text-brand-green font-bold">$50</span>.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-8 animate-in slide-in-from-bottom-8 fade-in duration-1000 delay-1000">
-            <Button size="lg" className="w-full sm:w-auto text-lg px-10 h-14 rounded-full bg-brand-green hover:bg-brand-green/90 text-black font-bold shadow-[0_0_20px_rgba(10,191,83,0.3)] transition-all hover:scale-105">
+            <Button
+              size="lg"
+              className="w-full sm:w-auto text-lg px-10 h-14 rounded-full bg-brand-green hover:bg-brand-green/90 text-black font-bold shadow-[0_0_20px_rgba(10,191,83,0.3)] transition-all hover:scale-105"
+              onClick={() => {
+                const element = document.getElementById('featured');
+                if (element) {
+                  element.scrollIntoView({ behavior: 'smooth' });
+                }
+              }}
+            >
               Start Investing
             </Button>
-            <Button size="lg" variant="outline" className="w-full sm:w-auto h-14 rounded-full border-white/20 text-white hover:bg-white/10 hover:text-white bg-transparent backdrop-blur-sm text-lg px-10">
-              View Portfolio
+            <Button asChild size="lg" variant="outline" className="w-full sm:w-auto h-14 rounded-full border-white/20 text-white hover:bg-white/10 hover:text-white bg-transparent backdrop-blur-sm text-lg px-10">
+              <Link href="/portfolio">
+                View Portfolio
+              </Link>
             </Button>
           </div>
         </div>
@@ -49,7 +60,7 @@ export default function Home() {
       </section>
 
       {/* Featured Properties */}
-      <section className="py-24 bg-background">
+      <section id="featured" className="py-24 bg-background">
         <div className="container px-4 md:px-8 max-w-screen-2xl">
           <div className="flex items-end justify-between mb-12">
             <div>
