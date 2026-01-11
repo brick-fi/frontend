@@ -7,6 +7,10 @@ interface AiAnalysisProps {
 }
 
 export function AiAnalysis({ property }: AiAnalysisProps) {
+    const yieldNum = parseFloat(property.projectedYield)
+    const isHighYield = !isNaN(yieldNum) && yieldNum > 6.0
+    const locationCity = property.location.split(',')[0]
+
     return (
         <Card className="border-border/50 shadow-sm bg-gradient-to-br from-brand-light to-white dark:from-secondary/20 dark:to-background">
             <CardHeader className="pb-3">
@@ -25,15 +29,15 @@ export function AiAnalysis({ property }: AiAnalysisProps) {
                     <ul className="space-y-2 text-sm text-muted-foreground pl-1">
                         <li className="flex gap-2">
                             <span className="block w-1 h-1 rounded-full bg-foreground mt-2 shrink-0" />
-                            Located in Gangnam's prime business district with <strong className="text-foreground">0.5% vacancy rate</strong> avg.
+                            Located in <strong className="text-foreground">{locationCity}</strong> prime district with high occupancy potential.
                         </li>
                         <li className="flex gap-2">
                             <span className="block w-1 h-1 rounded-full bg-foreground mt-2 shrink-0" />
-                            Recent renovation (2024) minimizes maintenance costs for next 5 years.
+                            Projected yield of <strong className="text-foreground">{property.projectedYield}</strong> {isHighYield ? "outperforms market average." : "offers stable, consistent returns."}
                         </li>
                         <li className="flex gap-2">
                             <span className="block w-1 h-1 rounded-full bg-foreground mt-2 shrink-0" />
-                            High demand from short-term business travelers (Yield premium +1.2%).
+                            High demand from short-term business travelers in this area.
                         </li>
                     </ul>
                 </div>
@@ -45,11 +49,11 @@ export function AiAnalysis({ property }: AiAnalysisProps) {
                     <ul className="space-y-2 text-sm text-muted-foreground pl-1">
                         <li className="flex gap-2">
                             <span className="block w-1 h-1 rounded-full bg-foreground mt-2 shrink-0" />
-                            Short-term lease structure requires active property management (delegated).
+                            Market volatility in {locationCity} may affect short-term asset valuation.
                         </li>
                         <li className="flex gap-2">
                             <span className="block w-1 h-1 rounded-full bg-foreground mt-2 shrink-0" />
-                            Sensitive to potential regulatory changes in Gangnam district housing laws.
+                            Maintenance costs for premium amenities may fluctuate seasonally.
                         </li>
                     </ul>
                 </div>

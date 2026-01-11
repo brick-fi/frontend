@@ -1,10 +1,14 @@
+"use client"
+
 import { Button } from "@/components/ui/button"
-import { PROPERTIES } from "@/data/properties"
 import { PropertyCard } from "@/components/property/property-card"
 import Link from "next/link"
-import { ArrowRight } from "lucide-react"
+import { ArrowRight, Plus } from "lucide-react"
+import { useProperties } from "@/context/property-context"
 
 export default function Home() {
+  const { properties } = useProperties()
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
@@ -52,13 +56,21 @@ export default function Home() {
               <h2 className="text-3xl font-bold tracking-tight mb-2">Featured Opportunities</h2>
               <p className="text-muted-foreground">Curated high-yield rental properties available for immediate investment.</p>
             </div>
-            <Button variant="ghost" className="hidden md:flex gap-2">
-              View All <ArrowRight className="h-4 w-4" />
-            </Button>
+            <div className="flex gap-4">
+              <Button asChild variant="outline" className="hidden md:flex gap-2">
+                <Link href="/property/create">
+                  <Plus className="h-4 w-4" /> List Your Property
+                </Link>
+              </Button>
+              <Button variant="ghost" className="hidden md:flex gap-2">
+                View All <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {PROPERTIES.map(property => (
+            {properties.map(property => (
               <PropertyCard key={property.id} property={property} />
             ))}
             {/* Placeholder for layout balance if needed */}

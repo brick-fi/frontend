@@ -1,9 +1,17 @@
+"use client"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PROPERTIES } from "@/data/properties"
 import { Badge } from "@/components/ui/badge"
+import { useProperties } from "@/context/property-context"
+import { PropertyCard } from "@/components/property/property-card"
 
 export default function PortfolioPage() {
+    const { properties, favorites } = useProperties()
     const myProperty = PROPERTIES[0]
+
+    // Find favorite property objects
+    const favoriteProperties = properties.filter(p => favorites.includes(p.id))
 
     return (
         <div className="container py-12 max-w-4xl px-4">
@@ -56,6 +64,18 @@ export default function PortfolioPage() {
                         </div>
                     </CardContent>
                 </Card>
+
+                {/* New: Wishlist Section */}
+                {favoriteProperties.length > 0 && (
+                    <>
+                        <h2 className="text-xl font-bold mt-8">My Wishlist</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {favoriteProperties.map(property => (
+                                <PropertyCard key={property.id} property={property} />
+                            ))}
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     )

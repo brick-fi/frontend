@@ -33,6 +33,8 @@ export function InvestmentPanel({ property }: InvestmentPanelProps) {
                         <Input
                             id="amount"
                             type="number"
+                            min={50}
+                            step={50}
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
                             className="pl-7"
@@ -43,7 +45,7 @@ export function InvestmentPanel({ property }: InvestmentPanelProps) {
                 <div className="rounded-lg bg-secondary/50 p-4 space-y-3 text-sm">
                     <div className="flex justify-between">
                         <span className="text-muted-foreground">Est. Tokens</span>
-                        <span className="font-medium">{(Number(amount) * 0.98).toFixed(2)} CFT</span>
+                        <span className="font-medium">{(Number(amount) * 0.98).toFixed(2)} {property.tokenSymbol}</span>
                     </div>
                     <div className="flex justify-between">
                         <span className="text-muted-foreground">Proj. Monthly Income</span>
@@ -65,7 +67,7 @@ export function InvestmentPanel({ property }: InvestmentPanelProps) {
             </CardContent>
             <CardFooter>
                 <Button className="w-full" size="lg" variant="premium">
-                    <Wallet className="mr-2 h-4 w-4" /> Mint Cashflow Tokens
+                    <Wallet className="mr-2 h-4 w-4" /> Confirm Investment
                 </Button>
             </CardFooter>
         </Card>

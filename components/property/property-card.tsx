@@ -1,14 +1,21 @@
+"use client"
+
 import Link from "next/link"
 import Image from "next/image"
 import { Property } from "@/data/properties"
 import { Button } from "@/components/ui/button"
 import { Heart } from "lucide-react"
+import { useProperties } from "@/context/property-context"
+import { cn } from "@/lib/utils"
 
 interface PropertyCardProps {
     property: Property
 }
 
 export function PropertyCard({ property }: PropertyCardProps) {
+    const { isFavorite, toggleFavorite } = useProperties()
+    const isFav = isFavorite(property.id)
+
     return (
         <div className="group relative overflow-hidden rounded-xl bg-card text-card-foreground shadow-sm transition-all hover:shadow-lg border border-border/50">
             <div className="aspect-[4/3] w-full overflow-hidden bg-muted relative">
@@ -19,12 +26,21 @@ export function PropertyCard({ property }: PropertyCardProps) {
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
                 <div className="absolute top-3 right-3">
-                    <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm hover:bg-background">
-                        <Heart className="h-4 w-4" />
+                    <Button
+                        size="icon"
+                        variant="secondary"
+                        className={cn("h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm hover:bg-background transition-colors", isFav && "text-red-500 hover:text-red-600")}
+                        onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            toggleFavorite(property.id)
+                        }}
+                    >
+                        <Heart className={cn("h-4 w-4", isFav && "fill-current")} />
                     </Button>
                 </div>
                 <div className="absolute bottom-3 left-3 flex gap-2">
-                    {property.tags.map(tag => (
+                    {property?.tags?.map(tag => (
                         <span key={tag} className="px-2 py-1 text-xs font-medium bg-brand-dark/80 text-brand-light backdrop-blur-md rounded-md">
                             {tag}
                         </span>
@@ -54,10 +70,10 @@ export function PropertyCard({ property }: PropertyCardProps) {
                     <div className="flex-1">
                         <div className="flex justify-between text-xs mb-1">
                             <span>Funded</span>
-                            <span className="font-medium">{property.funded}%</span>
+                            <span className="font-medium">{property.funded || 0}%</span>
                         </div>
                         <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
-                            <div className="h-full bg-brand-gold rounded-full" style={{ width: `${property.funded}%` }} />
+                            <div className="h-full bg-brand-gold rounded-full" style={{ width: `${property.funded || 0}%` }} />
                         </div>
                     </div>
                 </div>
