@@ -27,29 +27,69 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
     // Load contract properties when available
     useEffect(() => {
         if (propertiesDetails && Array.isArray(propertiesDetails)) {
-            const contractProperties: Property[] = propertiesDetails.map((detail: any, index: number) => {
-                // Calculate expected monthly income from annual yield
-                const totalValue = Number(formatUnits(detail.totalValue, 6))
-                const expectedMonthlyIncome = Number(formatUnits(detail.expectedMonthlyIncome, 6))
-                const annualYield = totalValue > 0 ? (expectedMonthlyIncome * 12 / totalValue * 100) : 0
+            const loadPropertiesWithMetadata = async () => {
+                const contractProperties: Property[] = await Promise.all(
+                    propertiesDetails.map(async (detail: any) => {
+                        // Calculate expected monthly income from annual yield
+                        const totalValue = Number(formatUnits(detail.totalValue, 6))
+                        const expectedMonthlyIncome = Number(formatUnits(detail.expectedMonthlyIncome, 6))
+                        const annualYield = totalValue > 0 ? (expectedMonthlyIncome * 12 / totalValue * 100) : 0
 
-                return {
-                    id: detail.propertyAddress,
-                    title: detail.name,
-                    location: detail.location,
-                    imageUrl: detail.metadataURI || `/dubai-downtown.png`,
-                    projectedYield: `${annualYield.toFixed(1)}%`,
-                    minInvestment: "$50",
-                    totalValue: `$${totalValue.toLocaleString()}`,
-                    funded: Number(detail.fundingPercentage),
-                    description: `Property tokenized on BrickFi platform. Total value: $${totalValue.toLocaleString()}`,
-                    tags: detail.isActive ? ["Active", "Blockchain"] : ["Inactive"],
-                    tokenSymbol: detail.name.substring(0, 3).toUpperCase(),
-                }
-            })
+                        // Try to fetch metadata from IPFS if available
+                        let imageUrl = `/dubai-downtown.png`
+                        let description = `Property tokenized on BrickFi platform. Total value: $${totalValue.toLocaleString()}`
+                        let tags = detail.isActive ? ["Active", "Blockchain"] : ["Inactive"]
 
-            setProperties(contractProperties)
-            setIsLoading(false)
+                        if (detail.metadataURI && detail.metadataURI !== "") {
+                            try {
+                                // Convert ipfs:// to gateway URL
+                                const gatewayURL = detail.metadataURI.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
+                                const response = await fetch(gatewayURL)
+
+                                if (response.ok) {
+                                    const metadata = await response.json()
+
+                                    // Use first image from metadata
+                                    if (metadata.images && metadata.images.length > 0) {
+                                        imageUrl = metadata.images[0].replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
+                                    }
+
+                                    // Use description from metadata
+                                    if (metadata.description) {
+                                        description = metadata.description
+                                    }
+
+                                    // Add location as tag
+                                    if (metadata.location) {
+                                        tags = [...tags, metadata.location]
+                                    }
+                                }
+                            } catch (error) {
+                                console.error('Failed to fetch metadata for property:', detail.propertyAddress, error)
+                            }
+                        }
+
+                        return {
+                            id: detail.propertyAddress,
+                            title: detail.name,
+                            location: detail.location,
+                            imageUrl,
+                            projectedYield: `${annualYield.toFixed(1)}%`,
+                            minInvestment: "$50",
+                            totalValue: `$${totalValue.toLocaleString()}`,
+                            funded: Number(detail.fundingPercentage),
+                            description,
+                            tags,
+                            tokenSymbol: detail.name.substring(0, 3).toUpperCase(),
+                        }
+                    })
+                )
+
+                setProperties(contractProperties)
+                setIsLoading(false)
+            }
+
+            loadPropertiesWithMetadata()
         }
     }, [propertiesDetails])
 
