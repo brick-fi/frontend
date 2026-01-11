@@ -1,5 +1,8 @@
+'use client';
+
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 export function Header() {
     return (
@@ -35,9 +38,7 @@ export function Header() {
                     <Button variant="ghost" size="sm" className="hidden sm:flex">
                         How it works
                     </Button>
-                    <Button variant="default" size="sm" className="font-bold">
-                        Connect Wallet
-                    </Button>
+                    <ConnectButton />
                 </div>
             </div>
         </header>
