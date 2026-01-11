@@ -1,0 +1,116 @@
+'use client'
+
+import { useState } from 'react'
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { parseUnits } from 'viem'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { toast } from 'sonner'
+import { DemoUSDCABI } from '@/lib/abis/DemoUSDC'
+import { PropertyTokenABI } from '@/lib/abis/PropertyToken'
+import { CONTRACTS, MIN_INVESTMENT } from '@/lib/contracts'
+
+interface PropertyInvestButtonProps {
+  propertyTokenAddress: `0x${string}`
+  propertyName: string
+}
+
+export function PropertyInvestButton({ propertyTokenAddress, propertyName }: PropertyInvestButtonProps) {
+  const { address } = useAccount()
+  const [investAmount, setInvestAmount] = useState('')
+
+  // Approve USDC
+  const { writeContract: approveUSDC, data: approveHash } = useWriteContract()
+  const { isLoading: isApproving, isSuccess: isApproveSuccess } = useWaitForTransactionReceipt({
+    hash: approveHash,
+  })
+
+  // Invest
+  const { writeContract: invest, data: investHash } = useWriteContract()
+  const { isLoading: isInvesting, isSuccess: isInvestSuccess } = useWaitForTransactionReceipt({
+    hash: investHash,
+  })
+
+  const handleInvest = async () => {
+    if (!address) {
+      toast.error('Please connect your wallet')
+      return
+    }
+
+    const amount = parseFloat(investAmount)
+    if (isNaN(amount) || amount < 50) {
+      toast.error('Minimum investment is $50')
+      return
+    }
+
+    try {
+      // Parse amount to USDC units (6 decimals)
+      const amountInUSDC = parseUnits(investAmount, 6)
+
+      // Step 1: Approve USDC
+      toast.info('Approving USDC...')
+      approveUSDC({
+        address: CONTRACTS.DEMO_USDC,
+        abi: DemoUSDCABI,
+        functionName: 'approve',
+        args: [propertyTokenAddress, amountInUSDC],
+      })
+    } catch (error) {
+      console.error('Investment error:', error)
+      toast.error('Investment failed')
+    }
+  }
+
+  // When approve succeeds, invest
+  if (isApproveSuccess && investHash === undefined) {
+    const amountInUSDC = parseUnits(investAmount, 6)
+
+    toast.success('USDC approved! Investing...')
+    invest({
+      address: propertyTokenAddress,
+      abi: PropertyTokenABI,
+      functionName: 'invest',
+      args: [amountInUSDC],
+    })
+  }
+
+  // When invest succeeds
+  if (isInvestSuccess) {
+    toast.success(`Successfully invested $${investAmount} in ${propertyName}!`)
+    setInvestAmount('')
+  }
+
+  const isLoading = isApproving || isInvesting
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium">Investment Amount (USDC)</label>
+        <Input
+          type="number"
+          min="50"
+          step="10"
+          placeholder="50"
+          value={investAmount}
+          onChange={(e) => setInvestAmount(e.target.value)}
+          disabled={isLoading}
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          Minimum: $50 | Platform fee: 2%
+        </p>
+      </div>
+
+      <Button
+        onClick={handleInvest}
+        disabled={!address || isLoading || !investAmount}
+        className="w-full"
+      >
+        {isLoading ? (
+          isApproving ? 'Approving USDC...' : 'Investing...'
+        ) : (
+          'Invest Now'
+        )}
+      </Button>
+    </div>
+  )
+}
