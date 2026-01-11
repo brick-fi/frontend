@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits } from 'viem'
 import { Button } from '@/components/ui/button'
@@ -13,11 +13,19 @@ import { CONTRACTS, MIN_INVESTMENT } from '@/lib/contracts'
 interface PropertyInvestButtonProps {
   propertyTokenAddress: `0x${string}`
   propertyName: string
+  investAmount?: string
 }
 
-export function PropertyInvestButton({ propertyTokenAddress, propertyName }: PropertyInvestButtonProps) {
+export function PropertyInvestButton({ propertyTokenAddress, propertyName, investAmount: externalAmount }: PropertyInvestButtonProps) {
   const { address } = useAccount()
-  const [investAmount, setInvestAmount] = useState('')
+  const [investAmount, setInvestAmount] = useState(externalAmount || '')
+
+  // Sync with external amount if provided
+  React.useEffect(() => {
+    if (externalAmount) {
+      setInvestAmount(externalAmount)
+    }
+  }, [externalAmount])
 
   // Approve USDC
   const { writeContract: approveUSDC, data: approveHash } = useWriteContract()
@@ -82,6 +90,26 @@ export function PropertyInvestButton({ propertyTokenAddress, propertyName }: Pro
 
   const isLoading = isApproving || isInvesting
 
+  // If external amount is provided, only render the button (for use in InvestmentPanel)
+  if (externalAmount) {
+    return (
+      <Button
+        onClick={handleInvest}
+        disabled={!address || isLoading || !investAmount}
+        className="w-full"
+        size="lg"
+        variant="premium"
+      >
+        {isLoading ? (
+          isApproving ? 'Approving USDC...' : 'Investing...'
+        ) : (
+          'Confirm Investment'
+        )}
+      </Button>
+    )
+  }
+
+  // Standalone version with input field
   return (
     <div className="space-y-4">
       <div>
