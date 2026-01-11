@@ -26,8 +26,8 @@ export default async function PropertyPage({ params }: PropertyPageProps) {
         <div className="flex flex-col min-h-screen bg-background">
             <PropertyHero property={property} />
 
-            <div className="container px-4 md:px-8 max-w-screen-2xl py-8">
-                <div className="flex flex-col lg:flex-row gap-8">
+            <div className="w-full px-4 md:px-12 lg:px-20 2xl:px-32 py-12">
+                <div className="flex flex-col lg:flex-row gap-12 2xl:gap-24">
                     {/* Left Column: Analysis & Details */}
                     <div className="flex-1 space-y-8">
                         <div>

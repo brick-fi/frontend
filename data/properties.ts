@@ -3,6 +3,7 @@ export interface Property {
     title: string
     location: string
     imageUrl: string
+    images?: string[]
     projectedYield: string
     minInvestment: string
     totalValue: string
@@ -18,6 +19,7 @@ export const PROPERTIES: Property[] = [
         title: "The Address Downtown SkyView",
         location: "Downtown Dubai, UAE",
         imageUrl: "/dubai-downtown.png",
+        images: ["/dubai-downtown.png", "/dubai-downtown-interior.png", "/dubai-downtown-bedroom.png"],
         projectedYield: "5.8% - 6.8%",
         minInvestment: "$50",
         totalValue: "$1,250,000",
@@ -31,6 +33,7 @@ export const PROPERTIES: Property[] = [
         title: "Marina Gate Waterfront",
         location: "Dubai Marina, UAE",
         imageUrl: "/dubai-marina.png",
+        images: ["/dubai-marina.png", "/dubai-marina-interior.png", "/dubai-marina-balcony.png"],
         projectedYield: "6.5% - 7.2%",
         minInvestment: "$50",
         totalValue: "$850,000",
@@ -44,6 +47,7 @@ export const PROPERTIES: Property[] = [
         title: "Signature Villa Palm Jumeirah",
         location: "Palm Jumeirah, UAE",
         imageUrl: "/dubai-palm.png",
+        images: ["/dubai-palm.png", "/dubai-palm-interior.png", "/dubai-palm-pool.png"],
         projectedYield: "5.0% - 6.0%",
         minInvestment: "$50",
         totalValue: "$5,500,000",
