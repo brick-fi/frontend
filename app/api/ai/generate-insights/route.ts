@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { AIInsights } from '@/types/metadata'
 
 /**
  * API Route: Generate AI investment insights for properties using Claude
@@ -14,13 +15,6 @@ interface PropertyInput {
   description?: string
   amenities?: string[]
   tags?: string[]
-}
-
-interface InvestmentInsights {
-  keyAdvantages: string[]
-  riskFactors: string[]
-  summary: string
-  yieldEstimate?: string
 }
 
 export async function POST(request: NextRequest) {
@@ -118,7 +112,7 @@ Be professional, data-driven, and concise. Focus on actionable insights for inve
     }
 
     // Parse AI response
-    const insights: InvestmentInsights = JSON.parse(jsonText)
+    const insights: AIInsights = JSON.parse(jsonText)
 
     return NextResponse.json({
       success: true,

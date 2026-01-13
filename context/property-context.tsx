@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect } from
 import { Property, PROPERTIES as initialProperties } from "@/data/properties"
 import { usePropertyFactory } from "@/hooks/usePropertyFactory"
 import { formatUnits } from "viem"
+import { PropertyMetadata } from "@/types/metadata"
 
 interface PropertyContextType {
     properties: Property[]
@@ -37,8 +38,10 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
 
                         // Try to fetch metadata from IPFS if available
                         let imageUrl = `/dubai-downtown.png`
+                        let images: string[] = []
                         let description = `Property tokenized on BrickFi platform. Total value: $${totalValue.toLocaleString()}`
-                        let tags = detail.isActive ? ["Active", "Blockchain"] : ["Inactive"]
+                        let tags: string[] = detail.isActive ? ["Active"] : ["Inactive"]
+                        let aiInsights = null
 
                         if (detail.metadataURI && detail.metadataURI !== "") {
                             try {
@@ -47,11 +50,14 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
                                 const response = await fetch(gatewayURL)
 
                                 if (response.ok) {
-                                    const metadata = await response.json()
+                                    const metadata: PropertyMetadata = await response.json()
 
-                                    // Use first image from metadata
+                                    // Convert all IPFS image URIs to gateway URLs
                                     if (metadata.images && metadata.images.length > 0) {
-                                        imageUrl = metadata.images[0].replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
+                                        images = metadata.images.map(uri =>
+                                            uri.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
+                                        )
+                                        imageUrl = images[0] // First image as primary
                                     }
 
                                     // Use description from metadata
@@ -59,9 +65,14 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
                                         description = metadata.description
                                     }
 
-                                    // Add location as tag
-                                    if (metadata.location) {
-                                        tags = [...tags, metadata.location]
+                                    // Use tags from metadata
+                                    if (metadata.tags && metadata.tags.length > 0) {
+                                        tags = [...tags, ...metadata.tags]
+                                    }
+
+                                    // Get AI insights if available
+                                    if (metadata.aiInsights) {
+                                        aiInsights = metadata.aiInsights
                                     }
                                 }
                             } catch (error) {
@@ -74,6 +85,7 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
                             title: detail.name,
                             location: detail.location,
                             imageUrl,
+                            images: images.length > 0 ? images : undefined, // Only include if we have images
                             projectedYield: `${annualYield.toFixed(1)}%`,
                             minInvestment: "$50",
                             totalValue: `$${totalValue.toLocaleString()}`,
@@ -81,6 +93,7 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
                             description,
                             tags,
                             tokenSymbol: detail.name.substring(0, 3).toUpperCase(),
+                            aiInsights, // Include AI insights from metadata
                         }
                     })
                 )

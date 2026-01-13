@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { useProperties } from "@/context/property-context"
 import { usePropertyFactory } from "@/hooks/usePropertyFactory"
 import { useRouter } from "next/navigation"
@@ -14,6 +15,7 @@ import { parseUnits } from "viem"
 import { useAccount } from "wagmi"
 import { PropertyFactoryABI } from "@/lib/abis/PropertyFactory"
 import { CONTRACTS } from "@/lib/contracts"
+import { PropertyMetadata } from "@/types/metadata"
 
 export default function CreatePropertyPage() {
     const { refetchProperties } = useProperties()
@@ -34,8 +36,10 @@ export default function CreatePropertyPage() {
     const [formData, setFormData] = useState({
         name: "",
         location: "",
+        description: "",
         totalValue: "",
         expectedMonthlyIncome: "",
+        tags: "",
     })
 
     const [images, setImages] = useState<File[]>([])
@@ -53,8 +57,8 @@ export default function CreatePropertyPage() {
         const monthlyIncome = parseFloat(formData.expectedMonthlyIncome)
 
         // Basic Validation
-        if (!formData.name || !formData.location || isNaN(totalValue) || isNaN(monthlyIncome)) {
-            toast.error("Please fill in all fields correctly.")
+        if (!formData.name || !formData.location || !formData.description || isNaN(totalValue) || isNaN(monthlyIncome)) {
+            toast.error("Please fill in all required fields correctly.")
             return
         }
 
@@ -92,33 +96,55 @@ export default function CreatePropertyPage() {
                 imageURIs.push(data.ipfsURL) // ipfs://...
             }
 
-            // Step 2: Create metadata object
-            const metadata = {
+            // Step 2: Generate AI insights
+            toast.info("Generating AI investment insights...")
+            let aiInsights = null
+            try {
+                const insightsResponse = await fetch('/api/ai/generate-insights', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        name: formData.name,
+                        location: formData.location,
+                        totalValue: totalValue,
+                        expectedMonthlyIncome: monthlyIncome,
+                    }),
+                })
+
+                if (insightsResponse.ok) {
+                    const insightsData = await insightsResponse.json()
+                    aiInsights = insightsData.insights
+                    console.log('AI Insights generated:', aiInsights)
+                } else {
+                    console.error('Failed to generate AI insights:', await insightsResponse.text())
+                    toast.warning("AI insights generation failed, continuing without them")
+                }
+            } catch (error) {
+                console.error('Error generating AI insights:', error)
+                toast.warning("AI insights unavailable, continuing without them")
+            }
+
+            // Step 3: Create metadata object
+            // Parse tags from comma-separated string
+            const tagsArray = formData.tags
+                .split(',')
+                .map(tag => tag.trim())
+                .filter(tag => tag.length > 0)
+
+            const metadata: PropertyMetadata = {
                 name: formData.name,
-                description: `Property located in ${formData.location}`,
+                description: formData.description,
                 location: formData.location,
                 totalValue: totalValue,
                 expectedMonthlyIncome: monthlyIncome,
                 images: imageURIs,
-                attributes: [
-                    {
-                        trait_type: "Total Value",
-                        value: totalValue,
-                        display_type: "number"
-                    },
-                    {
-                        trait_type: "Monthly Income",
-                        value: monthlyIncome,
-                        display_type: "number"
-                    },
-                    {
-                        trait_type: "Location",
-                        value: formData.location
-                    }
-                ]
+                tags: tagsArray,
+                aiInsights: aiInsights,
             }
 
-            // Step 3: Upload metadata to IPFS
+            // Step 4: Upload metadata to IPFS
             toast.info("Uploading metadata to IPFS...")
             const metadataResponse = await fetch('/api/ipfs/upload-metadata', {
                 method: 'POST',
@@ -137,7 +163,7 @@ export default function CreatePropertyPage() {
 
             setUploadingImages(false)
 
-            // Step 4: Generate random 3-letter token symbol
+            // Step 5: Generate random 3-letter token symbol
             const randomSymbol = Array.from({ length: 3 }, () =>
                 String.fromCharCode(65 + Math.floor(Math.random() * 26))
             ).join('')
@@ -248,6 +274,35 @@ export default function CreatePropertyPage() {
                                 onChange={e => setFormData({ ...formData, location: e.target.value })}
                                 required
                             />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="description">Description *</Label>
+                            <Textarea
+                                id="description"
+                                placeholder="Describe the property, its features, location benefits, and investment potential..."
+                                value={formData.description}
+                                onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                required
+                                rows={4}
+                                className="resize-none"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                This description will be visible to investors on the property details page.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="tags">Tags (Optional)</Label>
+                            <Input
+                                id="tags"
+                                placeholder="e.g. Luxury, High Yield, Beachfront"
+                                value={formData.tags}
+                                onChange={e => setFormData({ ...formData, tags: e.target.value })}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Comma-separated tags to help investors find your property (e.g., "Luxury, Waterfront, High Yield")
+                            </p>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
