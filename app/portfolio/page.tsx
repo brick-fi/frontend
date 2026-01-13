@@ -189,15 +189,23 @@ export default function PortfolioPage() {
                 )}
 
                 {/* Wishlist Section */}
-                {favoriteProperties.length > 0 && (
-                    <>
-                        <h2 className="text-xl font-bold mt-8">My Wishlist</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {favoriteProperties.map(property => (
-                                <PropertyCard key={property.id} property={property} />
-                            ))}
+                <h2 className="text-xl font-bold mt-8">My Wishlist</h2>
+                {favoriteProperties.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {favoriteProperties.map(property => (
+                            <PropertyCard key={property.id} property={property} />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-12 border border-dashed border-border rounded-lg">
+                        <div className="mx-auto w-16 h-16 rounded-full bg-secondary flex items-center justify-center mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
+                                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+                            </svg>
                         </div>
-                    </>
+                        <h3 className="text-lg font-semibold mb-2">No Properties in Wishlist</h3>
+                        <p className="text-muted-foreground mb-6">Start adding properties to your wishlist by clicking the heart icon</p>
+                    </div>
                 )}
             </div>
         </div>
