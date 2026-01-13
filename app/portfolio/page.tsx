@@ -21,8 +21,8 @@ function PropertyInvestment({ property, address }: { property: Property, address
     const { data: monthlyIncome } = getUserProjectedMonthlyIncome(address)
 
     const balanceNum = balance ? Number(balance) : 0
-    const investmentAmountNum = investmentAmount ? Number(formatUnits(investmentAmount, 6)) : 0
-    const monthlyIncomeNum = monthlyIncome ? Number(formatUnits(monthlyIncome, 6)) : 0
+    const investmentAmountNum = investmentAmount ? Number(formatUnits(investmentAmount as bigint, 6)) : 0
+    const monthlyIncomeNum = monthlyIncome ? Number(formatUnits(monthlyIncome as bigint, 6)) : 0
 
     // Only render if user has invested
     if (balanceNum === 0) return null
@@ -38,7 +38,7 @@ function PropertyInvestment({ property, address }: { property: Property, address
                                 alt={property.title}
                                 fill
                                 className="object-cover"
-                                unoptimized={property.imageUrl.includes('gateway.pinata.cloud')}
+                                unoptimized={property.imageUrl.includes('ipfs.io') || property.imageUrl.includes('gateway.pinata.cloud')}
                             />
                         </div>
                         <div>
@@ -80,8 +80,8 @@ function PortfolioStats({ properties, address }: { properties: Property[], addre
         const { data: monthlyIncome } = getUserProjectedMonthlyIncome(address)
 
         const balanceNum = balance ? Number(balance) : 0
-        const investmentAmountNum = investmentAmount ? Number(formatUnits(investmentAmount, 6)) : 0
-        const monthlyIncomeNum = monthlyIncome ? Number(formatUnits(monthlyIncome, 6)) : 0
+        const investmentAmountNum = investmentAmount ? Number(formatUnits(investmentAmount as bigint, 6)) : 0
+        const monthlyIncomeNum = monthlyIncome ? Number(formatUnits(monthlyIncome as bigint, 6)) : 0
 
         if (balanceNum > 0) {
             totalInvested += investmentAmountNum

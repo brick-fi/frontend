@@ -45,9 +45,14 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
 
                         if (detail.metadataURI && detail.metadataURI !== "") {
                             try {
-                                // Convert ipfs:// to gateway URL
-                                const gatewayURL = detail.metadataURI.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
-                                const response = await fetch(gatewayURL)
+                                // Convert ipfs:// to gateway URL - use ipfs.io as fallback for CORS issues
+                                const gatewayURL = detail.metadataURI.replace('ipfs://', 'https://ipfs.io/ipfs/')
+                                const response = await fetch(gatewayURL, {
+                                    mode: 'cors',
+                                    headers: {
+                                        'Accept': 'application/json'
+                                    }
+                                })
 
                                 if (response.ok) {
                                     const metadata: PropertyMetadata = await response.json()
@@ -55,7 +60,7 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
                                     // Convert all IPFS image URIs to gateway URLs
                                     if (metadata.images && metadata.images.length > 0) {
                                         images = metadata.images.map(uri =>
-                                            uri.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
+                                            uri.replace('ipfs://', 'https://ipfs.io/ipfs/')
                                         )
                                         imageUrl = images[0] // First image as primary
                                     }
