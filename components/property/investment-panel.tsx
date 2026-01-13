@@ -21,8 +21,7 @@ export function InvestmentPanel({ property }: InvestmentPanelProps) {
     const propertyAddress = property.id as `0x${string}`
 
     // Fetch property token data
-    const { propertyInfo, getUserProjectedMonthlyIncome } = usePropertyToken(propertyAddress)
-    const { data: projectedIncome } = getUserProjectedMonthlyIncome(address)
+    const { propertyInfo } = usePropertyToken(propertyAddress)
 
     // Calculate estimated tokens and monthly income
     const investAmount = parseFloat(amount) || 0
@@ -31,19 +30,25 @@ export function InvestmentPanel({ property }: InvestmentPanelProps) {
     const tokenPrice = 50 // $50 per token
     const estimatedTokens = amountAfterFee / tokenPrice
 
-    // Calculate projected monthly income based on investment
+    // Calculate projected monthly income based on token ownership
     let monthlyIncome = 0
-    if (propertyInfo && Array.isArray(propertyInfo)) {
-        const expectedMonthlyIncome = Number(formatUnits(propertyInfo[4], 6)) // expectedMonthlyIncome from PropertyInfo
-        const totalValue = Number(formatUnits(propertyInfo[3], 6)) // totalValue from PropertyInfo
-        if (totalValue > 0) {
-            monthlyIncome = (investAmount / totalValue) * expectedMonthlyIncome
+
+    if (propertyInfo && Array.isArray(propertyInfo) && propertyInfo.length >= 5) {
+        try {
+            const totalValue = Number(formatUnits(propertyInfo[2], 6)) // totalValue from PropertyInfo (index 2)
+            const expectedMonthlyIncome = Number(formatUnits(propertyInfo[3], 6)) // expectedMonthlyIncome from PropertyInfo (index 3)
+
+            // Calculate total token supply (totalValue / $50 per token)
+            const totalTokenSupply = totalValue / tokenPrice
+
+            // User's share = (user's tokens / total tokens) * monthly income
+            if (totalTokenSupply > 0 && !isNaN(expectedMonthlyIncome) && !isNaN(totalValue)) {
+                monthlyIncome = (estimatedTokens / totalTokenSupply) * expectedMonthlyIncome
+            }
+        } catch (error) {
+            console.error('Error calculating monthly income:', error)
         }
     }
-
-    // Show user's current monthly income if exists
-    const hasCurrentIncome: boolean = !!(address && projectedIncome && typeof projectedIncome === 'bigint' && Number(projectedIncome) > 0)
-    const currentMonthlyIncome = hasCurrentIncome && typeof projectedIncome === 'bigint' ? Number(formatUnits(projectedIncome, 6)) : 0
 
     return (
         <Card className="border-border/50 shadow-md h-fit sticky top-24">
@@ -63,42 +68,51 @@ export function InvestmentPanel({ property }: InvestmentPanelProps) {
                             id="amount"
                             type="number"
                             min={50}
-                            step={10}
+                            step={50}
                             value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
+                            onChange={(e) => {
+                                const value = e.target.value
+                                // Allow empty string for user to clear and type
+                                if (value === '') {
+                                    setAmount('')
+                                    return
+                                }
+                                // Round to nearest 50
+                                const numValue = parseFloat(value)
+                                if (!isNaN(numValue)) {
+                                    const rounded = Math.round(numValue / 50) * 50
+                                    setAmount(rounded.toString())
+                                }
+                            }}
+                            onBlur={(e) => {
+                                // Ensure minimum of 50 on blur
+                                const numValue = parseFloat(e.target.value)
+                                if (isNaN(numValue) || numValue < 50) {
+                                    setAmount('50')
+                                }
+                            }}
                             className="pl-7"
                         />
                     </div>
                 </div>
 
                 <div className="rounded-lg bg-secondary/50 p-4 space-y-3 text-sm">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Est. Tokens</span>
-                        <span className="font-medium">{estimatedTokens.toFixed(2)} {property.tokenSymbol}</span>
+                        <span className="font-semibold text-foreground">{estimatedTokens.toFixed(2)} {property.tokenSymbol}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Proj. Monthly Income</span>
-                        <span className="font-medium text-brand-gold">
+                        <span className="font-semibold text-brand-gold">
                             ${monthlyIncome.toFixed(2)} / mo
                         </span>
                     </div>
                     <div className="border-t border-border/50 my-2" />
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Platform Fee</span>
-                        <span>${platformFee.toFixed(2)} (2%)</span>
+                        <span className="font-medium text-foreground">${platformFee.toFixed(2)} (2%)</span>
                     </div>
                 </div>
-
-                {hasCurrentIncome && (
-                    <div className="rounded-lg bg-brand-gold/10 border border-brand-gold/20 p-3 text-sm">
-                        <div className="flex justify-between">
-                            <span className="text-muted-foreground">Your Current Monthly Income</span>
-                            <span className="font-medium text-brand-gold">
-                                ${currentMonthlyIncome.toFixed(2)} / mo
-                            </span>
-                        </div>
-                    </div>
-                )}
 
                 <div className="flex items-start gap-2 text-xs text-muted-foreground bg-blue-500/10 p-3 rounded-md">
                     <Info className="h-4 w-4 shrink-0 mt-0.5 text-blue-500" />

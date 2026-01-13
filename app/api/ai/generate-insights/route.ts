@@ -41,10 +41,6 @@ export async function POST(request: NextRequest) {
     // Initialize Anthropic Claude
     const anthropic = new Anthropic({ apiKey: anthropicApiKey })
 
-    // Calculate projected yield
-    const annualIncome = propertyData.expectedMonthlyIncome * 12
-    const projectedYield = ((annualIncome / propertyData.totalValue) * 100).toFixed(2)
-
     // Construct prompt
     const prompt = `You are a real estate investment analyst. Analyze this tokenized real estate property and generate investment insights.
 
@@ -55,7 +51,6 @@ Property Information:
 - Location: ${propertyData.location}
 - Total Value: $${propertyData.totalValue.toLocaleString()}
 - Expected Monthly Income: $${propertyData.expectedMonthlyIncome.toLocaleString()}
-- Projected Annual Yield: ${projectedYield}%
 ${propertyData.description ? `- Description: ${propertyData.description}` : ''}
 ${propertyData.amenities?.length ? `- Amenities: ${propertyData.amenities.join(', ')}` : ''}
 ${propertyData.tags?.length ? `- Tags: ${propertyData.tags.join(', ')}` : ''}
@@ -78,8 +73,7 @@ Respond ONLY with a valid JSON object in this exact format:
 {
   "keyAdvantages": ["advantage 1", "advantage 2", "advantage 3"],
   "riskFactors": ["risk 1", "risk 2"],
-  "summary": "One sentence overall assessment",
-  "yieldEstimate": "${projectedYield}%"
+  "summary": "One sentence overall assessment"
 }
 
 Be professional, data-driven, and concise. Focus on actionable insights for investors.`

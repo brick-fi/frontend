@@ -5,7 +5,6 @@ export interface AIInsights {
   keyAdvantages: string[]
   riskFactors: string[]
   summary: string
-  yieldEstimate: string
 }
 
 /**

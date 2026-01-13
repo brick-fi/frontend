@@ -10,6 +10,7 @@ export interface Property {
     minInvestment: string
     totalValue: string
     funded: number
+    investorCount: number
     description: string
     tags: string[]
     tokenSymbol: string

@@ -20,6 +20,9 @@ export function PropertyInvestButton({ propertyTokenAddress, propertyName, inves
   const { address } = useAccount()
   const [investAmount, setInvestAmount] = useState(externalAmount || '')
 
+  // Determine if we're in "external amount" mode (used in InvestmentPanel)
+  const isExternalMode = externalAmount !== undefined
+
   // Sync with external amount if provided
   React.useEffect(() => {
     if (externalAmount) {
@@ -70,38 +73,47 @@ export function PropertyInvestButton({ propertyTokenAddress, propertyName, inves
   }
 
   // When approve succeeds, invest
-  if (isApproveSuccess && investHash === undefined) {
-    const amountInUSDC = parseUnits(investAmount, 6)
+  React.useEffect(() => {
+    if (isApproveSuccess && investHash === undefined) {
+      const amountInUSDC = parseUnits(investAmount, 6)
 
-    toast.success('USDC approved! Investing...')
-    invest({
-      address: propertyTokenAddress,
-      abi: PropertyTokenABI,
-      functionName: 'invest',
-      args: [amountInUSDC],
-    })
-  }
+      toast.success('USDC approved! Investing...')
+      invest({
+        address: propertyTokenAddress,
+        abi: PropertyTokenABI,
+        functionName: 'invest',
+        args: [amountInUSDC],
+      })
+    }
+  }, [isApproveSuccess, investHash])
 
   // When invest succeeds
-  if (isInvestSuccess) {
-    toast.success(`Successfully invested $${investAmount} in ${propertyName}!`)
-    setInvestAmount('')
-  }
+  React.useEffect(() => {
+    if (isInvestSuccess) {
+      toast.success(`Successfully invested $${investAmount} in ${propertyName}!`)
+      setInvestAmount('')
+    }
+  }, [isInvestSuccess])
 
   const isLoading = isApproving || isInvesting
 
   // If external amount is provided, only render the button (for use in InvestmentPanel)
-  if (externalAmount) {
+  if (isExternalMode) {
+    const isDisabled = !address || isLoading || !investAmount || parseFloat(investAmount) < 50
+
     return (
       <Button
         onClick={handleInvest}
-        disabled={!address || isLoading || !investAmount}
-        className="w-full"
+        disabled={isDisabled}
+        className="w-full bg-brand-green hover:bg-brand-green/90 text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-green"
         size="lg"
-        variant="premium"
       >
-        {isLoading ? (
+        {!address ? (
+          'Connect Wallet to Invest'
+        ) : isLoading ? (
           isApproving ? 'Approving USDC...' : 'Investing...'
+        ) : !investAmount || parseFloat(investAmount) < 50 ? (
+          'Enter Valid Amount'
         ) : (
           'Confirm Investment'
         )}
@@ -109,7 +121,7 @@ export function PropertyInvestButton({ propertyTokenAddress, propertyName, inves
     )
   }
 
-  // Standalone version with input field
+  // Standalone version with input field (should not be rendered when used in InvestmentPanel)
   return (
     <div className="space-y-4">
       <div>
