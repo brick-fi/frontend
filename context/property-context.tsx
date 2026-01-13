@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react"
-import { Property, PROPERTIES as initialProperties } from "@/data/properties"
+import { Property } from "@/data/properties"
 import { usePropertyFactory } from "@/hooks/usePropertyFactory"
 import { formatUnits } from "viem"
 import { PropertyMetadata } from "@/types/metadata"
@@ -19,7 +19,7 @@ interface PropertyContextType {
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined)
 
 export function PropertyProvider({ children }: { children: ReactNode }) {
-    const [properties, setProperties] = useState<Property[]>(initialProperties)
+    const [properties, setProperties] = useState<Property[]>([])
     const [favorites, setFavorites] = useState<string[]>([])
     const [isLoading, setIsLoading] = useState(true)
 
