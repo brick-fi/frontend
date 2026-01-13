@@ -95,6 +95,7 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
                             minInvestment: "$50",
                             totalValue: `$${totalValue.toLocaleString()}`,
                             funded: Number(detail.fundingPercentage),
+                            investorCount: detail.investorCount ? Number(detail.investorCount) : 0,
                             description,
                             tags,
                             tokenSymbol: detail.name.substring(0, 3).toUpperCase(),
