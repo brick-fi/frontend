@@ -23,7 +23,7 @@ export function Header() {
                         </span>
                     </Link>
                     <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
-                        <Link href="/" className="transition-colors hover:text-foreground">
+                        <Link href="/#featured" className="transition-colors hover:text-foreground">
                             Marketplace
                         </Link>
                         <Link href="/portfolio" className="transition-colors hover:text-foreground">
