@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { Loader2, Wallet, DollarSign } from "lucide-react"
 import { useState, useEffect } from "react"
-import { useAccount } from "wagmi"
+import { useAccount, useWaitForTransactionReceipt } from "wagmi"
 import { useProperties } from "@/context/property-context"
 import { usePropertyToken } from "@/hooks/usePropertyToken"
 import { PropertyTokenABI } from "@/lib/abis/PropertyToken"
@@ -27,13 +27,48 @@ function PropertyDistributionCard({ property }: { property: PropertyForDistribut
     const [amount, setAmount] = useState("")
     const [description, setDescription] = useState("")
     const [step, setStep] = useState<"idle" | "approving" | "distributing" | "done">("idle")
+    const [approveHash, setApproveHash] = useState<`0x${string}` | undefined>(undefined)
+    const [distributeHash, setDistributeHash] = useState<`0x${string}` | undefined>(undefined)
 
     const propertyAddress = property.id as `0x${string}`
-    const { invest, isPending: isInvestPending } = usePropertyToken(propertyAddress)
+    const { invest } = usePropertyToken(propertyAddress)
     const { address } = useAccount()
-    const { approve, isPending: isApprovePending } = useDemoUSDC()
+    const { approve } = useDemoUSDC()
 
     const USDC_ADDRESS = process.env.NEXT_PUBLIC_DEMO_USDC_ADDRESS as `0x${string}`
+
+    // Wait for approve tx
+    const { isLoading: isApproveLoading, isSuccess: isApproveSuccess } = useWaitForTransactionReceipt({
+        hash: approveHash,
+    })
+
+    // Wait for distribute tx
+    const { isLoading: isDistributeLoading, isSuccess: isDistributeSuccess } = useWaitForTransactionReceipt({
+        hash: distributeHash,
+    })
+
+    // Progress to next step when approve completes
+    useEffect(() => {
+        if (isApproveSuccess && step === "approving") {
+            setStep("distributing")
+            toast.info("Step 2/2: Distributing revenue...")
+        }
+    }, [isApproveSuccess, step])
+
+    // Complete when distribute completes
+    useEffect(() => {
+        if (isDistributeSuccess && step === "distributing") {
+            setAmount("")
+            setDescription("")
+            setStep("done")
+            toast.success("Revenue distributed successfully!")
+            setTimeout(() => {
+                setStep("idle")
+                setApproveHash(undefined)
+                setDistributeHash(undefined)
+            }, 2000)
+        }
+    }, [isDistributeSuccess, step])
 
     const handleDistribute = async () => {
         if (!address) {
@@ -53,69 +88,73 @@ function PropertyDistributionCard({ property }: { property: PropertyForDistribut
         }
 
         try {
-            // Convert to USDC amount (6 decimals)
-            const usdcAmount = parseUnits(amount, 6)
-
-            // Step 1: Approve USDC
             setStep("approving")
             toast.info("Step 1/2: Approving USDC...")
 
-            await new Promise<void>((resolve, reject) => {
-                approve({
-                    address: USDC_ADDRESS,
-                    abi: [
-                        {
-                            name: "approve",
-                            type: "function",
-                            stateMutability: "nonpayable",
-                            inputs: [
-                                { name: "spender", type: "address" },
-                                { name: "amount", type: "uint256" }
-                            ],
-                            outputs: [{ name: "", type: "bool" }]
+            // Convert to USDC amount (6 decimals)
+            const usdcAmount = parseUnits(amount, 6)
+
+            // Step 1: Approve USDC - just trigger it
+            approve({
+                address: USDC_ADDRESS,
+                abi: [
+                    {
+                        name: "approve",
+                        type: "function",
+                        stateMutability: "nonpayable",
+                        inputs: [
+                            { name: "spender", type: "address" },
+                            { name: "amount", type: "uint256" }
+                        ],
+                        outputs: [{ name: "", type: "bool" }]
+                    }
+                ],
+                functionName: "approve",
+                args: [propertyAddress, usdcAmount],
+                // @ts-ignore - wagmi callback
+                onSuccess: (hash: `0x${string}`) => {
+                    setApproveHash(hash)
+                },
+                onError: (error: any) => {
+                    toast.error(error?.message || "Approval failed")
+                    setStep("idle")
+                }
+            } as any)
+
+            // Store distribute params for next step
+            const distributeParams = {
+                address: propertyAddress,
+                abi: PropertyTokenABI,
+                functionName: "distributeRevenue" as const,
+                args: [usdcAmount, description],
+            }
+
+            // Wait for approve to succeed, then trigger distribute
+            let approveCheckCount = 0
+            const checkApproveInterval = setInterval(() => {
+                approveCheckCount++
+                if (approveHash) {
+                    clearInterval(checkApproveInterval)
+                    // Trigger distribute
+                    invest({
+                        ...distributeParams,
+                        // @ts-ignore - wagmi callback
+                        onSuccess: (hash: `0x${string}`) => {
+                            setDistributeHash(hash)
+                        },
+                        onError: (error: any) => {
+                            toast.error(error?.message || "Distribution failed")
+                            setStep("idle")
                         }
-                    ],
-                    functionName: "approve",
-                    args: [propertyAddress, usdcAmount],
-                    // @ts-ignore - wagmi callback
-                    onSuccess: () => {
-                        resolve()
-                    },
-                    onError: (error: any) => {
-                        reject(error)
-                    }
-                } as any)
-            })
-
-            // Step 2: Distribute revenue
-            setStep("distributing")
-            toast.info("Step 2/2: Distributing revenue...")
-
-            await new Promise<void>((resolve, reject) => {
-                invest({
-                    address: propertyAddress,
-                    abi: PropertyTokenABI,
-                    functionName: "distributeRevenue",
-                    args: [usdcAmount, description],
-                    // @ts-ignore - wagmi callback
-                    onSuccess: () => {
-                        resolve()
-                    },
-                    onError: (error: any) => {
-                        reject(error)
-                    }
-                } as any)
-            })
-
-            // Reset form
-            setAmount("")
-            setDescription("")
-            setStep("done")
-
-            toast.success("Revenue distributed successfully!")
-
-            // Reset step after delay
-            setTimeout(() => setStep("idle"), 2000)
+                    } as any)
+                }
+                // Timeout after 60 seconds
+                if (approveCheckCount > 60) {
+                    clearInterval(checkApproveInterval)
+                    toast.error("Approval transaction timeout")
+                    setStep("idle")
+                }
+            }, 1000)
         } catch (error: any) {
             console.error("Distribution error:", error)
             toast.error(error?.message || "Distribution failed")
