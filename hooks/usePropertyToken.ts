@@ -96,7 +96,7 @@ export function usePropertyToken(propertyTokenAddress?: Address) {
   const {
     writeContract: invest,
     data: investHash,
-    isPending: isInvesting,
+    isPending,
     isError: isInvestError,
     error: investError,
   } = useWriteContract()
@@ -144,7 +144,7 @@ export function usePropertyToken(propertyTokenAddress?: Address) {
 
     // Invest
     invest,
-    isInvesting,
+    isPending,
     isWaitingForInvest,
     isInvestSuccess,
     isInvestError,

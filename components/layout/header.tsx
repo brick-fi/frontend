@@ -30,7 +30,7 @@ export function Header() {
                             Portfolio
                         </Link>
                         <Link href="/admin" className="transition-colors hover:text-foreground text-brand-gold">
-                            Admin (Demo)
+                            Admin
                         </Link>
                     </nav>
                 </div>

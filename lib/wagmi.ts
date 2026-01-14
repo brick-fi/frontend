@@ -24,6 +24,6 @@ const isDevelopment = process.env.NODE_ENV === 'development'
 export const config = getDefaultConfig({
   appName: 'BrickFi',
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJECT_ID',
-  chains: isDevelopment ? [localhost, mantleSepoliaTestnet] : [mantleSepoliaTestnet],
+  chains: isDevelopment ? [localhost] : [mantleSepoliaTestnet],
   ssr: true,
 });
