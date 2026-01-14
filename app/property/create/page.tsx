@@ -202,7 +202,7 @@ export default function CreatePropertyPage() {
         const files = e.target.files
         if (!files) return
 
-        const fileArray = Array.from(files).slice(0, 3) // Max 3 images
+        const fileArray = Array.from(files)
 
         // Validate file types
         const validFiles = fileArray.filter(file => file.type.startsWith('image/'))
@@ -212,7 +212,15 @@ export default function CreatePropertyPage() {
             return
         }
 
-        setImages(validFiles)
+        // Append new images to existing ones, max 3 total
+        const updatedImages = [...images, ...validFiles].slice(0, 3)
+
+        if (updatedImages.length > 3) {
+            toast.error("Maximum 3 images allowed")
+            return
+        }
+
+        setImages(updatedImages)
     }
 
     const removeImage = (index: number) => {
