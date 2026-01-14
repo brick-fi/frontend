@@ -21,8 +21,8 @@ export default function CreatePropertyPage() {
         title: "",
         location: "",
         price: "",
-        yield: "",
-        imageUrl: "", // For now, we'll input a URL or use a default
+        monthlyIncome: "",
+        imageUrl: "", // Keeping this in state for now, though UI will show dropzone
     })
 
     const handleSubmit = async (e: FormEvent) => {
@@ -33,12 +33,19 @@ export default function CreatePropertyPage() {
         await new Promise(resolve => setTimeout(resolve, 800))
 
         const priceNum = parseFloat(formData.price)
+        const monthlyIncomeNum = parseFloat(formData.monthlyIncome)
 
         // Basic Validation
         if (!formData.title || !formData.price || isNaN(priceNum)) {
             toast.error("Please fill in all strict fields correctly.")
             setLoading(false)
             return
+        }
+
+        // Calculate Yield: (Monthly * 12 / Total) * 100
+        let calculatedYield = "0"
+        if (!isNaN(monthlyIncomeNum) && !isNaN(priceNum) && priceNum > 0) {
+            calculatedYield = ((monthlyIncomeNum * 12) / priceNum * 100).toFixed(1)
         }
 
         // Generate random 3-4 uppercase letter token symbol
@@ -54,7 +61,7 @@ export default function CreatePropertyPage() {
             title: formData.title,
             location: formData.location,
             imageUrl: formData.imageUrl || "/dubai-downtown.png", // Default image if empty
-            projectedYield: formData.yield + "%",
+            projectedYield: calculatedYield + "%",
             minInvestment: "$50", // Default string
             funded: 0,
             totalValue: "$" + priceNum.toLocaleString(),
@@ -71,12 +78,12 @@ export default function CreatePropertyPage() {
     }
 
     return (
-        <div className="container max-w-2xl py-12 px-4">
+        <div className="container max-w-2xl py-12 px-4 mx-auto">
             <Button variant="ghost" onClick={() => router.back()} className="mb-6 pl-0 hover:bg-transparent hover:text-brand-green">
                 <ArrowLeft className="nr-2 h-4 w-4" /> Back to Marketplace
             </Button>
 
-            <div className="mb-8">
+            <div className="mb-8 text-center">
                 <h1 className="text-3xl font-bold mb-2">List Your Property</h1>
                 <p className="text-muted-foreground">Register a new asset for tokenization on BrickFi.</p>
             </div>
@@ -90,10 +97,10 @@ export default function CreatePropertyPage() {
                     <form onSubmit={handleSubmit} className="space-y-6">
 
                         <div className="space-y-2">
-                            <Label htmlFor="title">Property Title</Label>
+                            <Label htmlFor="title">Property Name</Label>
                             <Input
                                 id="title"
-                                placeholder="e.g. Luxury Penthouse in DIFC"
+                                placeholder="e.g. Luxury Penthouse DIFC"
                                 value={formData.title}
                                 onChange={e => setFormData({ ...formData, title: e.target.value })}
                                 required
@@ -124,36 +131,31 @@ export default function CreatePropertyPage() {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="yield">Projected Annual Yield (%)</Label>
+                                <Label htmlFor="monthlyIncome">Expected Monthly Income ($)</Label>
                                 <Input
-                                    id="yield"
-                                    placeholder="6.5"
-                                    value={formData.yield}
-                                    onChange={e => setFormData({ ...formData, yield: e.target.value })}
+                                    id="monthlyIncome"
+                                    placeholder="12500"
+                                    value={formData.monthlyIncome}
+                                    onChange={e => setFormData({ ...formData, monthlyIncome: e.target.value })}
                                     required
                                 />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="image">Image URL (Optional)</Label>
-                            <div className="flex gap-2">
-                                <Input
-                                    id="image"
-                                    placeholder="https://..."
-                                    value={formData.imageUrl}
-                                    onChange={e => setFormData({ ...formData, imageUrl: e.target.value })}
-                                />
-                                <Button type="button" variant="outline" size="icon" disabled>
-                                    <Upload className="h-4 w-4" />
-                                </Button>
+                            <Label>Property Images *</Label>
+                            <div className="border-2 border-dashed border-gray-200 rounded-lg py-12 px-4 flex flex-col items-center justify-center text-center hover:bg-gray-50 transition-colors cursor-pointer group">
+                                <Upload className="h-10 w-10 text-brand-green mb-4 group-hover:scale-110 transition-transform" />
+                                <p className="text-brand-green font-medium mb-1">
+                                    Click to upload <span className="text-muted-foreground font-normal">or drag and drop</span>
+                                </p>
+                                <p className="text-xs text-muted-foreground">1-3 images (PNG, JPG, max 10MB each)</p>
                             </div>
-                            <p className="text-xs text-muted-foreground">Leave empty to use a default luxury placeholder.</p>
                         </div>
 
                         <div className="pt-4 flex justify-end">
-                            <Button type="submit" size="lg" disabled={loading} className="bg-brand-green text-black hover:bg-brand-green/90 w-full md:w-auto">
-                                {loading ? "Listing..." : "List Property"}
+                            <Button type="submit" size="lg" disabled={loading} className="bg-brand-green text-black hover:bg-brand-green/90 w-full md:w-auto min-w-[150px]">
+                                {loading ? "Connecting..." : "Connect Wallet"}
                             </Button>
                         </div>
 

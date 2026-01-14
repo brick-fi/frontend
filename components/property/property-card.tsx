@@ -111,7 +111,7 @@ export function PropertyCard({ property }: PropertyCardProps) {
                 </div>
                 <div className="absolute top-3 left-3 flex gap-2 z-10">
                     {property?.tags?.map(tag => (
-                        <span key={tag} className="px-2 py-1 text-xs font-medium bg-brand-dark/80 text-brand-light backdrop-blur-md rounded-md">
+                        <span key={tag} className="px-2 py-1 text-xs font-medium bg-brand-dark/80 text-white backdrop-blur-md rounded-md">
                             {tag}
                         </span>
                     ))}

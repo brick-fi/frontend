@@ -29,14 +29,14 @@ export function Header() {
                         <Link href="/portfolio" className="transition-colors hover:text-foreground">
                             Portfolio
                         </Link>
-                        <Link href="/admin" className="transition-colors hover:text-foreground text-brand-gold">
-                            Admin (Demo)
+                        <Link href="/admin" className="transition-colors hover:text-emerald-400 text-brand-green font-bold">
+                            Admin
                         </Link>
                     </nav>
                 </div>
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="sm" className="hidden sm:flex">
-                        How it works
+                    <Button asChild variant="ghost" size="sm" className="hidden sm:flex">
+                        <Link href="/about">About Us</Link>
                     </Button>
                     <ConnectButton />
                 </div>

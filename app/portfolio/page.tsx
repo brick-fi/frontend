@@ -5,6 +5,7 @@ import { PROPERTIES } from "@/data/properties"
 import { Badge } from "@/components/ui/badge"
 import { useProperties } from "@/context/property-context"
 import { PropertyCard } from "@/components/property/property-card"
+import { CountUp } from "@/components/ui/count-up"
 
 export default function PortfolioPage() {
     const { properties, favorites } = useProperties()
@@ -14,7 +15,7 @@ export default function PortfolioPage() {
     const favoriteProperties = properties.filter(p => favorites.includes(p.id))
 
     return (
-        <div className="container py-12 max-w-4xl px-4">
+        <div className="container py-12 max-w-4xl px-4 mx-auto">
             <h1 className="text-3xl font-bold mb-8">My Portfolio</h1>
 
             <div className="grid gap-6">
@@ -24,7 +25,9 @@ export default function PortfolioPage() {
                             <CardTitle className="text-sm font-medium text-muted-foreground">Total Invested</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">$1,250.00</div>
+                            <div className="text-2xl font-bold">
+                                $<CountUp value={1250} decimals={2} duration={2} />
+                            </div>
                         </CardContent>
                     </Card>
                     <Card>
@@ -32,7 +35,9 @@ export default function PortfolioPage() {
                             <CardTitle className="text-sm font-medium text-muted-foreground">Monthly Cashflow</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-green-600">+$7.50</div>
+                            <div className="text-2xl font-bold text-green-600 flex items-center">
+                                +$<CountUp value={7.50} decimals={2} duration={2} />
+                            </div>
                         </CardContent>
                     </Card>
                     <Card>
@@ -40,7 +45,9 @@ export default function PortfolioPage() {
                             <CardTitle className="text-sm font-medium text-muted-foreground">Total Tokens</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">1,225 CFT</div>
+                            <div className="text-2xl font-bold">
+                                <CountUp value={1225} suffix=" CFT" duration={2} />
+                            </div>
                         </CardContent>
                     </Card>
                 </div>

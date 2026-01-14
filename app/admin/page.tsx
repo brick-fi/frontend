@@ -83,7 +83,7 @@ export default function AdminPage() {
     }
 
     return (
-        <div className="container py-12 max-w-4xl px-4">
+        <div className="container py-12 max-w-4xl px-4 mx-auto">
             <div className="flex items-center justify-between mb-8">
                 <h1 className="text-3xl font-bold">Admin Dashboard</h1>
                 <Button onClick={handleAddRent} className="gap-2 bg-brand-green text-black hover:bg-brand-green/90">
