@@ -191,7 +191,37 @@ export default function CreatePropertyPage() {
             // Calculate annual yield from monthly income
             const annualYield = totalValueNum > 0 ? ((yieldNum * 12) / totalValueNum * 100).toFixed(2) : "0"
 
-            // First, upload metadata to IPFS
+            // Generate AI insights before uploading metadata
+            toast.info("Generating AI investment insights...")
+            let aiInsights = null
+            try {
+                const insightsResponse = await fetch('/api/ai/generate-insights', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        name: formData.title,
+                        location: formData.location,
+                        totalValue: totalValueNum,
+                        expectedMonthlyIncome: yieldNum,
+                    }),
+                })
+
+                if (insightsResponse.ok) {
+                    const insightsData = await insightsResponse.json()
+                    aiInsights = insightsData.insights
+                    console.log('AI Insights generated:', aiInsights)
+                } else {
+                    console.error('Failed to generate AI insights:', await insightsResponse.text())
+                    toast.warning("AI insights generation failed, continuing without them")
+                }
+            } catch (error) {
+                console.error('Error generating AI insights:', error)
+                toast.warning("AI insights unavailable, continuing without them")
+            }
+
+            // Create metadata object with AI insights
             const metadata = {
                 name: formData.title,
                 description: formData.description,
@@ -200,7 +230,8 @@ export default function CreatePropertyPage() {
                 totalValue: totalValueNum,
                 expectedMonthlyIncome: yieldNum,
                 annualYield: annualYield,
-                tags: tagsArray
+                tags: tagsArray,
+                aiInsights: aiInsights
             }
 
             toast.info("Uploading metadata to IPFS...")
