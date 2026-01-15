@@ -11,8 +11,9 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { ArrowLeft, Upload } from "lucide-react"
 import { useAccount } from "wagmi"
-import { Property } from "@/data/properties"
-import { useState, FormEvent } from "react"
+import { PropertyFactoryABI } from "@/lib/abis/PropertyFactory"
+import { CONTRACTS } from "@/lib/contracts"
+import { useState, FormEvent, useEffect } from "react"
 
 type UploadProgress = {
     current: number
@@ -25,6 +26,7 @@ export default function CreatePropertyPage() {
     const { address } = useAccount()
     const router = useRouter()
     const [loading, setLoading] = useState(false)
+    const [txSubmitted, setTxSubmitted] = useState(false)
 
     const {
         createProperty,
@@ -47,6 +49,43 @@ export default function CreatePropertyPage() {
     const [images, setImages] = useState<File[]>([])
     const [uploadingImages, setUploadingImages] = useState(false)
     const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
+
+    // Handle transaction success
+    useEffect(() => {
+        if (isCreateSuccess && txSubmitted) {
+            toast.success("Property created successfully on blockchain!")
+            setTxSubmitted(false)
+
+            // Reset form
+            setFormData({
+                title: "",
+                location: "",
+                totalValue: "",
+                yield: "",
+                description: "",
+                tags: ""
+            })
+            setImages([])
+            setUploadProgress(null)
+
+            // Refetch properties and redirect
+            refetchProperties()
+            setTimeout(() => {
+                router.push("/")
+            }, 1000)
+        }
+    }, [isCreateSuccess, txSubmitted, refetchProperties, router])
+
+    // Handle transaction error
+    useEffect(() => {
+        if (isCreatePropertyError && createPropertyError) {
+            toast.error("Transaction failed", {
+                description: createPropertyError.message
+            })
+            setLoading(false)
+            setUploadingImages(false)
+        }
+    }, [isCreatePropertyError, createPropertyError])
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files
@@ -152,41 +191,57 @@ export default function CreatePropertyPage() {
             // Calculate annual yield from monthly income
             const annualYield = totalValueNum > 0 ? ((yieldNum * 12) / totalValueNum * 100).toFixed(2) : "0"
 
-            const newProperty: Property = {
-                id: `prop-${Date.now()}`,
-                title: formData.title,
-                location: formData.location,
-                imageUrl: imageURIs[0] || "/dubai-downtown.png", // First IPFS image or default
-                images: imageURIs.length > 0 ? imageURIs : undefined, // All IPFS URLs
-                projectedYield: annualYield + "%",
-                minInvestment: "$50",
-                funded: 0,
-                investorCount: 0,
-                totalValue: "$" + totalValueNum.toLocaleString(),
+            // First, upload metadata to IPFS
+            const metadata = {
+                name: formData.title,
                 description: formData.description,
-                tags: tagsArray.length > 0 ? tagsArray : ["New Listing"],
-                tokenSymbol: randomSymbol
+                images: imageURIs,
+                location: formData.location,
+                totalValue: totalValueNum,
+                expectedMonthlyIncome: yieldNum,
+                annualYield: annualYield,
+                tags: tagsArray
             }
 
-            addProperty(newProperty)
-            toast.success("Property Listed Successfully!", {
-                description: `${formData.title} has been added to the marketplace with images stored on IPFS.`
+            toast.info("Uploading metadata to IPFS...")
+            const metadataResponse = await fetch('/api/ipfs/upload-metadata', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ metadata }),
             })
 
-            // Reset form
-            setFormData({
-                title: "",
-                location: "",
-                totalValue: "",
-                yield: "",
-                description: "",
-                tags: ""
-            })
-            setImages([])
-            setUploadProgress(null)
+            if (!metadataResponse.ok) {
+                throw new Error("Failed to upload metadata to IPFS")
+            }
 
-            refetchProperties()
-            router.push("/")
+            const { ipfsHash: metadataHash } = await metadataResponse.json()
+            const metadataURI = `ipfs://${metadataHash}`
+
+            toast.info("Creating property on blockchain...")
+
+            // Prepare PropertyInfo struct for the smart contract
+            const propertyInfo = {
+                name: formData.title,
+                location: formData.location,
+                totalValue: BigInt(Math.round(totalValueNum * 1e6)), // Convert to USDC decimals (6)
+                expectedMonthlyIncome: BigInt(Math.round(yieldNum * 1e6)), // Convert to USDC decimals (6)
+                metadataURI: metadataURI,
+                isActive: true
+            }
+
+            // Create property on blockchain using wagmi writeContract
+            createProperty({
+                address: CONTRACTS.PROPERTY_FACTORY,
+                abi: PropertyFactoryABI,
+                functionName: 'createProperty',
+                args: [formData.title, randomSymbol, propertyInfo]
+            })
+
+            // Set flag that transaction was submitted
+            setTxSubmitted(true)
+            toast.success("Property transaction submitted! Please confirm in your wallet...")
         } catch (error) {
             console.error("Error creating property:", error)
             toast.error("Failed to create property", {
@@ -196,13 +251,6 @@ export default function CreatePropertyPage() {
             setUploadingImages(false)
             setLoading(false)
         }
-    }
-
-    // Handle error
-    if (isCreatePropertyError && createPropertyError) {
-        toast.error("Property creation failed", {
-            description: createPropertyError.message
-        })
     }
 
     return (
@@ -417,14 +465,16 @@ export default function CreatePropertyPage() {
                             <Button
                                 type="submit"
                                 size="lg"
-                                disabled={loading || !formData.title || !formData.location || !formData.description || !formData.totalValue || !formData.yield || !address || images.length === 0 || uploadingImages}
+                                disabled={loading || !formData.title || !formData.location || !formData.description || !formData.totalValue || !formData.yield || !address || images.length === 0 || uploadingImages || isCreatingProperty || isWaitingForCreate}
                                 className="bg-brand-green text-black hover:bg-brand-green/90 w-full md:w-auto"
                             >
                                 {!address ? "Connect Wallet" :
                                     uploadingImages && uploadProgress ?
                                         `Uploading ${uploadProgress.current}/${uploadProgress.total} images...` :
                                     uploadingImages ? "Uploading Images..." :
-                                        loading ? "Creating Property..." :
+                                        isCreatingProperty ? "Confirm in Wallet..." :
+                                        isWaitingForCreate ? "Processing Transaction..." :
+                                        loading ? "Preparing..." :
                                             "List Property"}
                             </Button>
                         </div>
