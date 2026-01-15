@@ -35,10 +35,11 @@ export default function CreatePropertyPage() {
         location: "",
         totalValue: "",
         yield: "",
-        imageUrl: "",
         description: "",
         tags: ""
     })
+    const [images, setImages] = useState<string[]>([])
+    const [imageInput, setImageInput] = useState("")
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault()
@@ -74,7 +75,8 @@ export default function CreatePropertyPage() {
             id: `prop-${Date.now()}`,
             title: formData.title,
             location: formData.location,
-            imageUrl: formData.imageUrl || "/dubai-downtown.png", // Default image if empty
+            imageUrl: images.length > 0 ? images[0] : "/dubai-downtown.png", // First image or default
+            images: images.length > 0 ? images : undefined, // Include all images
             projectedYield: formData.yield + "%",
             minInvestment: "$50", // Default string
             funded: 0,
@@ -89,6 +91,19 @@ export default function CreatePropertyPage() {
         toast.success("Property Listed Successfully!", {
             description: `${formData.title} has been added to the marketplace.`
         })
+
+        // Reset form
+        setFormData({
+            title: "",
+            location: "",
+            totalValue: "",
+            yield: "",
+            description: "",
+            tags: ""
+        })
+        setImages([])
+        setImageInput("")
+
         refetchProperties()
         router.push("/")
     }
@@ -195,20 +210,72 @@ export default function CreatePropertyPage() {
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="image">Image URL (Optional)</Label>
-                            <div className="flex gap-2">
-                                <Input
-                                    id="image"
-                                    placeholder="https://..."
-                                    value={formData.imageUrl}
-                                    onChange={e => setFormData({ ...formData, imageUrl: e.target.value })}
-                                />
-                                <Button type="button" variant="outline" size="icon" disabled>
-                                    <Upload className="h-4 w-4" />
-                                </Button>
+                        <div className="space-y-3">
+                            <div>
+                                <Label htmlFor="image">Property Images (Optional)</Label>
+                                <p className="text-xs text-muted-foreground mb-2">Add up to 3 images to showcase your property</p>
+                                <div className="flex gap-2">
+                                    <Input
+                                        id="image"
+                                        placeholder="https://..."
+                                        value={imageInput}
+                                        onChange={e => setImageInput(e.target.value)}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => {
+                                            if (!imageInput.trim()) {
+                                                toast.error("Please enter an image URL")
+                                                return
+                                            }
+                                            if (images.length >= 3) {
+                                                toast.error("Maximum 3 images allowed")
+                                                return
+                                            }
+                                            if (images.includes(imageInput.trim())) {
+                                                toast.error("This image URL is already added")
+                                                return
+                                            }
+                                            setImages([...images, imageInput.trim()])
+                                            setImageInput("")
+                                            toast.success(`Image added (${images.length + 1}/3)`)
+                                        }}
+                                    >
+                                        <Upload className="h-4 w-4" />
+                                    </Button>
+                                </div>
                             </div>
-                            <p className="text-xs text-muted-foreground">Leave empty to use a default luxury placeholder.</p>
+
+                            {/* Display added images */}
+                            {images.length > 0 && (
+                                <div className="space-y-2">
+                                    <p className="text-sm font-medium">Added Images ({images.length}/3):</p>
+                                    <div className="space-y-2">
+                                        {images.map((img, idx) => (
+                                            <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-muted rounded-md">
+                                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                    <span className="text-sm font-medium text-muted-foreground">#{idx + 1}</span>
+                                                    <p className="text-sm truncate text-muted-foreground">{img}</p>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => setImages(images.filter((_, i) => i !== idx))}
+                                                    className="text-destructive hover:text-destructive"
+                                                >
+                                                    Remove
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <p className="text-xs text-muted-foreground">
+                                Leave empty to use a default luxury placeholder. First image will be used as the main thumbnail.
+                            </p>
                         </div>
 
                         <div className="pt-4 flex justify-end">
