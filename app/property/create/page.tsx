@@ -14,6 +14,12 @@ import { useAccount } from "wagmi"
 import { Property } from "@/data/properties"
 import { useState, FormEvent } from "react"
 
+type UploadProgress = {
+    current: number
+    total: number
+    currentFileName: string
+}
+
 export default function CreatePropertyPage() {
     const { refetchProperties, addProperty } = useProperties()
     const { address } = useAccount()
@@ -38,8 +44,38 @@ export default function CreatePropertyPage() {
         description: "",
         tags: ""
     })
-    const [images, setImages] = useState<string[]>([])
-    const [imageInput, setImageInput] = useState("")
+    const [images, setImages] = useState<File[]>([])
+    const [uploadingImages, setUploadingImages] = useState(false)
+    const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
+
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files
+        if (!files) return
+
+        const fileArray = Array.from(files)
+
+        // Validate file types
+        const validFiles = fileArray.filter(file => file.type.startsWith('image/'))
+
+        if (validFiles.length !== fileArray.length) {
+            toast.error("Please select only image files")
+            return
+        }
+
+        // Append new images to existing ones, max 3 total
+        const remainingSlots = 3 - images.length
+        const filesToAdd = validFiles.slice(0, remainingSlots)
+
+        if (validFiles.length > remainingSlots) {
+            toast.error(`Maximum 3 images allowed. Only first ${remainingSlots} images will be added.`)
+        }
+
+        setImages([...images, ...filesToAdd])
+    }
+
+    const removeImage = (index: number) => {
+        setImages(images.filter((_, i) => i !== index))
+    }
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault()
@@ -58,54 +94,108 @@ export default function CreatePropertyPage() {
             return
         }
 
-        // Generate random 3-4 uppercase letter token symbol
-        const possibleChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        let randomSymbol = ""
-        const length = Math.floor(Math.random() * 2) + 3 // 3 or 4
-        for (let i = 0; i < length; i++) {
-            randomSymbol += possibleChars.charAt(Math.floor(Math.random() * possibleChars.length))
+        // Check if images are provided (required)
+        if (images.length === 0) {
+            toast.error("Please upload at least one property image.")
+            return
         }
 
-        // Parse tags
-        const tagsArray = formData.tags
-            ? formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
-            : ["New Listing"]
+        try {
+            setUploadingImages(true)
+            setLoading(true)
 
-        const newProperty: Property = {
-            id: `prop-${Date.now()}`,
-            title: formData.title,
-            location: formData.location,
-            imageUrl: images.length > 0 ? images[0] : "/dubai-downtown.png", // First image or default
-            images: images.length > 0 ? images : undefined, // Include all images
-            projectedYield: formData.yield + "%",
-            minInvestment: "$50", // Default string
-            funded: 0,
-            investorCount: 0,
-            totalValue: "$" + totalValueNum.toLocaleString(),
-            description: formData.description,
-            tags: tagsArray.length > 0 ? tagsArray : ["New Listing"],
-            tokenSymbol: randomSymbol
+            // Upload images to IPFS
+            toast.info("Uploading images to IPFS...")
+            const imageURIs: string[] = []
+
+            for (let i = 0; i < images.length; i++) {
+                const image = images[i]
+                setUploadProgress({
+                    current: i + 1,
+                    total: images.length,
+                    currentFileName: image.name
+                })
+
+                const formData = new FormData()
+                formData.append('file', image)
+
+                const response = await fetch('/api/ipfs/upload-image', {
+                    method: 'POST',
+                    body: formData,
+                })
+
+                if (!response.ok) {
+                    throw new Error(`Failed to upload image: ${image.name}`)
+                }
+
+                const data = await response.json()
+                imageURIs.push(data.ipfsURL) // ipfs://...
+            }
+
+            toast.success("Images uploaded to IPFS!", {
+                description: `${imageURIs.length} image(s) successfully uploaded`
+            })
+
+            // Generate random 3-4 uppercase letter token symbol
+            const possibleChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            let randomSymbol = ""
+            const length = Math.floor(Math.random() * 2) + 3 // 3 or 4
+            for (let i = 0; i < length; i++) {
+                randomSymbol += possibleChars.charAt(Math.floor(Math.random() * possibleChars.length))
+            }
+
+            // Parse tags
+            const tagsArray = formData.tags
+                ? formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
+                : ["New Listing"]
+
+            // Calculate annual yield from monthly income
+            const annualYield = totalValueNum > 0 ? ((yieldNum * 12) / totalValueNum * 100).toFixed(2) : "0"
+
+            const newProperty: Property = {
+                id: `prop-${Date.now()}`,
+                title: formData.title,
+                location: formData.location,
+                imageUrl: imageURIs[0] || "/dubai-downtown.png", // First IPFS image or default
+                images: imageURIs.length > 0 ? imageURIs : undefined, // All IPFS URLs
+                projectedYield: annualYield + "%",
+                minInvestment: "$50",
+                funded: 0,
+                investorCount: 0,
+                totalValue: "$" + totalValueNum.toLocaleString(),
+                description: formData.description,
+                tags: tagsArray.length > 0 ? tagsArray : ["New Listing"],
+                tokenSymbol: randomSymbol
+            }
+
+            addProperty(newProperty)
+            toast.success("Property Listed Successfully!", {
+                description: `${formData.title} has been added to the marketplace with images stored on IPFS.`
+            })
+
+            // Reset form
+            setFormData({
+                title: "",
+                location: "",
+                totalValue: "",
+                yield: "",
+                description: "",
+                tags: ""
+            })
+            setImages([])
+            setUploadProgress(null)
+
+            refetchProperties()
+            router.push("/")
+        } catch (error) {
+            console.error("Error creating property:", error)
+            toast.error("Failed to create property", {
+                description: error instanceof Error ? error.message : "An unknown error occurred"
+            })
+        } finally {
+            setUploadingImages(false)
+            setLoading(false)
         }
-
-        addProperty(newProperty)
-        toast.success("Property Listed Successfully!", {
-            description: `${formData.title} has been added to the marketplace.`
-        })
-
-        // Reset form
-        setFormData({
-            title: "",
-            location: "",
-            totalValue: "",
-            yield: "",
-            description: "",
-            tags: ""
-        })
-        setImages([])
-        setImageInput("")
-
-        refetchProperties()
-        router.push("/")
     }
 
     // Handle error
@@ -209,83 +299,133 @@ export default function CreatePropertyPage() {
                                     onChange={e => setFormData({ ...formData, yield: e.target.value })}
                                     required
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                    Annual yield will be calculated as: (Monthly Income × 12 / Total Value) × 100%
-                                </p>
                             </div>
                         </div>
 
                         <div className="space-y-3">
-                            <div>
-                                <Label htmlFor="image">Property Images (Optional)</Label>
-                                <p className="text-xs text-muted-foreground mb-2">Add up to 3 images to showcase your property</p>
-                                <div className="flex gap-2">
-                                    <Input
-                                        id="image"
-                                        placeholder="https://..."
-                                        value={imageInput}
-                                        onChange={e => setImageInput(e.target.value)}
-                                    />
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() => {
-                                            if (!imageInput.trim()) {
-                                                toast.error("Please enter an image URL")
-                                                return
-                                            }
-                                            if (images.length >= 3) {
-                                                toast.error("Maximum 3 images allowed")
-                                                return
-                                            }
-                                            if (images.includes(imageInput.trim())) {
-                                                toast.error("This image URL is already added")
-                                                return
-                                            }
-                                            setImages([...images, imageInput.trim()])
-                                            setImageInput("")
-                                            toast.success(`Image added (${images.length + 1}/3)`)
-                                        }}
-                                    >
-                                        <Upload className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            </div>
+                            <Label htmlFor="images" className="text-base">Property Images *</Label>
 
-                            {/* Display added images */}
-                            {images.length > 0 && (
-                                <div className="space-y-2">
-                                    <p className="text-sm font-medium">Added Images ({images.length}/3):</p>
-                                    <div className="space-y-2">
-                                        {images.map((img, idx) => (
-                                            <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-muted rounded-md">
-                                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                    <span className="text-sm font-medium text-muted-foreground">#{idx + 1}</span>
-                                                    <p className="text-sm truncate text-muted-foreground">{img}</p>
+                            {images.length === 0 ? (
+                                <div className="relative">
+                                    <Input
+                                        id="images"
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        onChange={handleImageChange}
+                                        disabled={uploadingImages}
+                                        className="hidden"
+                                    />
+                                    <label
+                                        htmlFor="images"
+                                        className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer transition-all ${
+                                            uploadingImages
+                                                ? 'border-muted bg-muted/50 cursor-not-allowed'
+                                                : 'border-border hover:border-brand-green hover:bg-brand-green/5'
+                                        }`}
+                                    >
+                                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                            <Upload className={`w-10 h-10 mb-3 ${uploadingImages ? 'text-muted-foreground' : 'text-brand-green'}`} />
+                                            <p className="mb-2 text-sm font-medium">
+                                                <span className="text-brand-green">Click to upload</span> or drag and drop
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                1-3 images (PNG, JPG, max 10MB each)
+                                            </p>
+                                        </div>
+                                    </label>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {images.map((image, index) => (
+                                            <div key={index} className="relative group">
+                                                <div className="aspect-square rounded-lg overflow-hidden border-2 border-border hover:border-brand-green transition-colors">
+                                                    <img
+                                                        src={URL.createObjectURL(image)}
+                                                        alt={`Property ${index + 1}`}
+                                                        className="w-full h-full object-cover"
+                                                    />
                                                 </div>
-                                                <Button
+                                                <button
                                                     type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => setImages(images.filter((_, i) => i !== idx))}
-                                                    className="text-destructive hover:text-destructive"
+                                                    onClick={() => removeImage(index)}
+                                                    className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1.5 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110"
+                                                    disabled={uploadingImages}
+                                                    title="Remove image"
                                                 >
-                                                    Remove
-                                                </Button>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                    </svg>
+                                                </button>
+                                                <p className="text-xs text-muted-foreground mt-1 truncate px-1" title={image.name}>
+                                                    {image.name}
+                                                </p>
                                             </div>
                                         ))}
+
+                                        {images.length < 3 && (
+                                            <div className="aspect-square">
+                                                <Input
+                                                    id={`images-add-${images.length}`}
+                                                    type="file"
+                                                    accept="image/*"
+                                                    multiple
+                                                    onChange={handleImageChange}
+                                                    disabled={uploadingImages}
+                                                    className="hidden"
+                                                />
+                                                <label
+                                                    htmlFor={`images-add-${images.length}`}
+                                                    className="flex flex-col items-center justify-center w-full h-full border-2 border-dashed border-border hover:border-brand-green hover:bg-brand-green/5 rounded-lg cursor-pointer transition-all"
+                                                >
+                                                    <Upload className="w-8 h-8 text-brand-green mb-2" />
+                                                    <p className="text-xs text-muted-foreground">Add more</p>
+                                                </label>
+                                            </div>
+                                        )}
                                     </div>
+
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <circle cx="12" cy="12" r="10"></circle>
+                                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                        </svg>
+                                        {images.length} of 3 images selected. Images will be stored on IPFS permanently.
+                                    </p>
+
+                                    {uploadingImages && uploadProgress && (
+                                        <div className="mt-3 p-3 bg-brand-green/10 border border-brand-green/20 rounded-lg">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <div className="animate-spin h-4 w-4 border-2 border-brand-green border-t-transparent rounded-full"></div>
+                                                <span className="text-sm font-medium text-brand-green">
+                                                    Uploading to IPFS: {uploadProgress.current} of {uploadProgress.total}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground truncate">
+                                                Current file: {uploadProgress.currentFileName}
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
-
-                            <p className="text-xs text-muted-foreground">
-                                Leave empty to use a default luxury placeholder. First image will be used as the main thumbnail.
-                            </p>
                         </div>
 
                         <div className="pt-4 flex justify-end">
-                            <Button type="submit" size="lg" disabled={loading} className="bg-brand-green text-black hover:bg-brand-green/90 w-full md:w-auto">
-                                {loading ? "Listing..." : "List Property"}
+                            <Button
+                                type="submit"
+                                size="lg"
+                                disabled={loading || !formData.title || !formData.location || !formData.description || !formData.totalValue || !formData.yield || !address || images.length === 0 || uploadingImages}
+                                className="bg-brand-green text-black hover:bg-brand-green/90 w-full md:w-auto"
+                            >
+                                {!address ? "Connect Wallet" :
+                                    uploadingImages && uploadProgress ?
+                                        `Uploading ${uploadProgress.current}/${uploadProgress.total} images...` :
+                                    uploadingImages ? "Uploading Images..." :
+                                        loading ? "Creating Property..." :
+                                            "List Property"}
                             </Button>
                         </div>
 
