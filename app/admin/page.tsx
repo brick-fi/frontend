@@ -209,13 +209,18 @@ function PropertyDistributionCard({ property }: { property: PropertyForDistribut
 
 export default function AdminPage() {
     const { address } = useAccount()
-    const { properties } = useProperties()
+    const { properties, isLoading: propertiesLoading } = useProperties()
     const [myProperties, setMyProperties] = useState<PropertyForDistribution[]>([])
     const [isLoading, setIsLoading] = useState(true)
 
     // Filter properties owned by the current user
     useEffect(() => {
         const loadMyProperties = async () => {
+            // Wait for properties to load from blockchain
+            if (propertiesLoading) {
+                return
+            }
+
             if (!address || !properties || properties.length === 0) {
                 setMyProperties([])
                 setIsLoading(false)
@@ -252,7 +257,7 @@ export default function AdminPage() {
                         name: check.property.title,
                         location: check.property.location,
                         imageUrl: check.property.imageUrl,
-                        investorCount: check.property.investorCount
+                        investorCount: check.property.investorCount || 0
                     }))
 
                 setMyProperties(ownedProperties)
@@ -264,7 +269,7 @@ export default function AdminPage() {
         }
 
         loadMyProperties()
-    }, [address, properties])
+    }, [address, properties, propertiesLoading])
 
     if (!address) {
         return (
