@@ -24,11 +24,16 @@ export function InvestmentPanel({ property }: InvestmentPanelProps) {
     const { propertyInfo } = usePropertyToken(propertyAddress)
 
     // Calculate estimated tokens and monthly income
+    // User enters the investment amount (what they want to invest, excluding fee)
+    // They send: totalAmount = investment * 1.02 (adding 2% fee)
+    // Contract calculates: platformFee = totalAmount * 2 / 102
+    // Contract calculates: amountAfterFee = totalAmount - platformFee = investment
+    // Contract calculates: tokens = amountAfterFee * 1e18 / TOKEN_PRICE
     const investAmount = parseFloat(amount) || 0
-    const platformFee = investAmount * 0.02
-    const amountAfterFee = investAmount - platformFee
+    const totalAmountToSend = investAmount * 1.02  // User pays investment + 2% fee
+    const platformFee = investAmount * 0.02  // 2% of investment amount
     const tokenPrice = 50 // $50 per token
-    const estimatedTokens = amountAfterFee / tokenPrice
+    const estimatedTokens = investAmount / tokenPrice  // Tokens based on investment amount (after fee is deducted)
 
     // Calculate projected monthly income based on token ownership
     let monthlyIncome = 0
@@ -109,8 +114,12 @@ export function InvestmentPanel({ property }: InvestmentPanelProps) {
                     </div>
                     <div className="border-t border-border/50 my-2" />
                     <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">Platform Fee</span>
-                        <span className="font-medium text-foreground">${platformFee.toFixed(2)} (2%)</span>
+                        <span className="text-muted-foreground">Platform Fee (2%)</span>
+                        <span className="font-medium text-foreground">${platformFee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground font-semibold">Total to Pay</span>
+                        <span className="font-semibold text-foreground">${totalAmountToSend.toFixed(2)}</span>
                     </div>
                 </div>
 

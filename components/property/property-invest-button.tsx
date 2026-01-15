@@ -87,7 +87,10 @@ export function PropertyInvestButton({ propertyTokenAddress, propertyName, inves
   // When approve succeeds, invest
   React.useEffect(() => {
     if (isApproveSuccess && investHash === undefined) {
-      const amountInUSDC = parseUnits(investAmount, 6)
+      // Calculate total amount (base + 2% fee) - matching the approve amount
+      const baseAmount = parseFloat(investAmount)
+      const totalAmount = baseAmount * 1.02
+      const amountInUSDC = parseUnits(totalAmount.toString(), 6)
 
       toast.success('USDC approved! Investing...')
       invest({
