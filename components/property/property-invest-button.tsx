@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits } from 'viem'
 import { Button } from '@/components/ui/button'
@@ -14,11 +14,22 @@ import { Confetti } from '@/components/ui/confetti'
 interface PropertyInvestButtonProps {
   propertyTokenAddress: `0x${string}`
   propertyName: string
+  investAmount?: string
 }
 
-export function PropertyInvestButton({ propertyTokenAddress, propertyName }: PropertyInvestButtonProps) {
+export function PropertyInvestButton({ propertyTokenAddress, propertyName, investAmount: externalAmount }: PropertyInvestButtonProps) {
   const { address } = useAccount()
-  const [investAmount, setInvestAmount] = useState('')
+  const [investAmount, setInvestAmount] = useState(externalAmount || '')
+
+  // Determine if we're in "external amount" mode (used in InvestmentPanel)
+  const isExternalMode = externalAmount !== undefined
+
+  // Sync with external amount if provided
+  React.useEffect(() => {
+    if (externalAmount) {
+      setInvestAmount(externalAmount)
+    }
+  }, [externalAmount])
 
   // Approve USDC
   const { writeContract: approveUSDC, data: approveHash } = useWriteContract()
@@ -74,31 +85,55 @@ export function PropertyInvestButton({ propertyTokenAddress, propertyName }: Pro
   }
 
   // When approve succeeds, invest
-  if (isApproveSuccess && investHash === undefined) {
-    // Re-calculate total for the invest call
-    // Note: In a real app we should store the 'pendingTotal' in state to ensure it matches
-    const base = parseFloat(investAmount)
-    const total = base * 1.02
-    const amountInUSDC = parseUnits(total.toString(), 6)
+  React.useEffect(() => {
+    if (isApproveSuccess && investHash === undefined) {
+      const amountInUSDC = parseUnits(investAmount, 6)
 
-    toast.success('USDC approved! Investing...')
-    invest({
-      address: propertyTokenAddress,
-      abi: PropertyTokenABI,
-      functionName: 'invest',
-      args: [amountInUSDC],
-    })
-  }
+      toast.success('USDC approved! Investing...')
+      invest({
+        address: propertyTokenAddress,
+        abi: PropertyTokenABI,
+        functionName: 'invest',
+        args: [amountInUSDC],
+      })
+    }
+  }, [isApproveSuccess, investHash])
 
   // When invest succeeds
-  if (isInvestSuccess) {
-    toast.success(`Successfully invested! You will receive full tokens.`)
-    // Reset after delay
-    setTimeout(() => setInvestAmount(''), 2000)
-  }
+  React.useEffect(() => {
+    if (isInvestSuccess) {
+      toast.success(`Successfully invested $${investAmount} in ${propertyName}!`)
+      setInvestAmount('')
+    }
+  }, [isInvestSuccess])
 
   const isLoading = isApproving || isInvesting
 
+  // If external amount is provided, only render the button (for use in InvestmentPanel)
+  if (isExternalMode) {
+    const isDisabled = !address || isLoading || !investAmount || parseFloat(investAmount) < 50
+
+    return (
+      <Button
+        onClick={handleInvest}
+        disabled={isDisabled}
+        className="w-full bg-brand-green hover:bg-brand-green/90 text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-green"
+        size="lg"
+      >
+        {!address ? (
+          'Connect Wallet to Invest'
+        ) : isLoading ? (
+          isApproving ? 'Approving USDC...' : 'Investing...'
+        ) : !investAmount || parseFloat(investAmount) < 50 ? (
+          'Enter Valid Amount'
+        ) : (
+          'Confirm Investment'
+        )}
+      </Button>
+    )
+  }
+
+  // Standalone version with input field (should not be rendered when used in InvestmentPanel)
   return (
     <div className="space-y-4">
       {isInvestSuccess && <Confetti />}

@@ -82,15 +82,15 @@ export function VisionSection() {
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-green/5 blur-[100px] rounded-full -z-10" />
                     <h2 className="text-4xl md:text-5xl font-black text-white mb-20 tracking-tight">The Future of RWA</h2>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
                         {/* Beyond Real Estate - Holographic Grid */}
                         <motion.div
                             whileHover={{ y: -5 }}
-                            className="bg-zinc-900/50 border border-white/5 rounded-3xl overflow-hidden relative group"
+                            className="bg-zinc-900/50 border border-white/5 rounded-3xl overflow-hidden relative group h-full flex flex-col"
                         >
                             <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-                            <div className="p-8 pb-0 text-left relative z-10">
+                            <div className="p-8 pb-0 text-left relative z-10 shrink-0">
                                 <Box className="w-10 h-10 text-purple-400 mb-6" />
                                 <h3 className="text-2xl font-bold text-white mb-4">Beyond Real Estate</h3>
                                 <p className="text-gray-400 mb-8 max-w-sm">
@@ -98,18 +98,29 @@ export function VisionSection() {
                                 </p>
                             </div>
 
-                            {/* Holographic Asset Grid */}
-                            <div className="grid grid-cols-2 gap-px bg-white/5 mt-8 border-t border-white/5">
+                            {/* Image Grid */}
+                            <div className="grid grid-cols-2 gap-px bg-white/5 mt-8 border-t border-white/5 flex-1 relative z-10">
                                 {[
-                                    { icon: "🛥️", name: "Superyachts", val: "+14.2%" },
-                                    { icon: "🏎️", name: "Supercars", val: "+9.5%" },
-                                    { icon: "🎨", name: "Fine Art", val: "+12.4%" },
-                                    { icon: "⌚️", name: "Luxury", val: "+8.2%" },
+                                    { img: "/superyacht.png", name: "Superyachts", val: "+14.2%" },
+                                    { img: "/supercar.png", name: "Supercars", val: "+9.5%" },
+                                    { img: "/fine-art.png", name: "Fine Art", val: "+12.4%" },
+                                    { img: "/luxury-watch.png", name: "Luxury", val: "+8.2%" },
                                 ].map((item, i) => (
-                                    <div key={i} className="bg-zinc-900/80 backdrop-blur-sm p-6 flex flex-col items-center justify-center gap-2 hover:bg-white/5 transition-colors group/item cursor-pointer h-32">
-                                        <span className="text-2xl mb-1 grayscale group-hover/item:grayscale-0 transition-all scale-90 group-hover/item:scale-110 duration-300">{item.icon}</span>
-                                        <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">{item.name}</span>
-                                        <span className="text-xs text-emerald-400 font-mono">{item.val}</span>
+                                    <div key={i} className="relative group/item cursor-pointer overflow-hidden h-full min-h-[160px]">
+                                        {/* Background Image */}
+                                        <div className="absolute inset-0 bg-black">
+                                            <img
+                                                src={item.img}
+                                                alt={item.name}
+                                                className="w-full h-full object-cover opacity-60 group-hover/item:opacity-100 group-hover/item:scale-110 transition-all duration-500 will-change-transform"
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-90 group-hover/item:opacity-60 transition-opacity duration-300" />
+                                        </div>
+
+                                        <div className="absolute inset-0 p-6 flex flex-col justify-end items-center text-center z-10">
+                                            <span className="text-xs font-bold text-white uppercase tracking-wider mb-1 drop-shadow-md transform translate-y-2 group-hover/item:translate-y-0 transition-transform duration-300">{item.name}</span>
+                                            <span className="text-xs text-emerald-400 font-mono opacity-0 group-hover/item:opacity-100 transform translate-y-4 group-hover/item:translate-y-0 transition-all duration-300">{item.val}</span>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -171,7 +182,7 @@ export function VisionSection() {
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-green to-teal-500">RENT INCOME</span>
                     </h2>
                     <Button asChild size="lg" className="bg-brand-green text-black hover:bg-brand-green/90 text-xl px-16 h-16 rounded-full font-bold shadow-[0_0_30px_-5px_rgba(34,197,94,0.4)]">
-                        <Link href="/property/create">Start Now</Link>
+                        <Link href="/#featured">Start Now</Link>
                     </Button>
                 </div>
 

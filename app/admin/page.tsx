@@ -4,183 +4,363 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import { Loader2, Plus, Pencil, Check, X, Wallet } from "lucide-react"
-import { useState } from "react"
-import { Badge } from "@/components/ui/badge"
+import { Loader2, Wallet, DollarSign } from "lucide-react"
+import { useState, useEffect } from "react"
+import { useAccount } from "wagmi"
+import { useProperties } from "@/context/property-context"
+import { usePropertyToken } from "@/hooks/usePropertyToken"
+import { PropertyTokenABI } from "@/lib/abis/PropertyToken"
+import { parseUnits } from "viem"
+import Image from "next/image"
+import { useDemoUSDC } from "@/hooks/useDemoUSDC"
 
-interface DistributionItem {
+interface PropertyForDistribution {
     id: string
     name: string
-    amount: number
-    status: "Pending" | "Distributed"
-    holders: number
+    location: string
+    imageUrl: string
+    investorCount: number
 }
 
-export default function AdminPage() {
-    // Initial Mock Data: 3 items as requested
-    const [distributions, setDistributions] = useState<DistributionItem[]>([
-        { id: "dist-1", name: "Downtown SkyView - Jan 2026", amount: 254.30, status: "Pending", holders: 128 },
-        { id: "dist-2", name: "Marina Gate - Jan 2026", amount: 185.00, status: "Pending", holders: 85 },
-        { id: "dist-3", name: "Palm Villa - Jan 2026", amount: 1250.00, status: "Pending", holders: 42 },
-    ])
+// Individual property distribution card
+function PropertyDistributionCard({ property }: { property: PropertyForDistribution }) {
+    const [amount, setAmount] = useState("")
+    const [description, setDescription] = useState("")
+    const [isLoading, setIsLoading] = useState(false)
+    const [currentStep, setCurrentStep] = useState<"step1" | "step2" | null>(null)
 
-    const [loadingIds, setLoadingIds] = useState<string[]>([])
-    const [editingId, setEditingId] = useState<string | null>(null)
-    const [editAmount, setEditAmount] = useState<string>("")
+    const propertyAddress = property.id as `0x${string}`
+    const { invest } = usePropertyToken(propertyAddress)
+    const { address } = useAccount()
+    const { approve } = useDemoUSDC()
 
-    // Handle Distribute Action
-    const handleDistribute = (id: string, amount: number) => {
-        setLoadingIds(prev => [...prev, id])
+    const USDC_ADDRESS = process.env.NEXT_PUBLIC_DEMO_USDC_ADDRESS as `0x${string}`
 
-        // Simulate Blockchain Transaction
-        setTimeout(() => {
-            setLoadingIds(prev => prev.filter(loadingId => loadingId !== id))
-            setDistributions(prev => prev.map(item =>
-                item.id === id ? { ...item, status: "Distributed" } : item
-            ))
-            toast.success("Distribution Successful", {
-                description: `$${amount.toFixed(2)} USDC has been sent to token holders.`
-            })
-        }, 2000)
-    }
-
-    // Handle Edit Start
-    const startEditing = (item: DistributionItem) => {
-        setEditingId(item.id)
-        setEditAmount(item.amount.toString())
-    }
-
-    // Handle Save Edit
-    const saveEdit = () => {
-        if (!editingId) return
-        const newAmount = parseFloat(editAmount)
-        if (isNaN(newAmount) || newAmount < 0) {
-            toast.error("Invalid Amount", { description: "Please enter a valid positive number." })
+    const handleDistribute = async () => {
+        if (!address) {
+            toast.error("Please connect your wallet")
             return
         }
 
-        setDistributions(prev => prev.map(item =>
-            item.id === editingId ? { ...item, amount: newAmount } : item
-        ))
-        setEditingId(null)
-        toast.success("Amount Updated")
-    }
-
-    // Handle Add New Rent
-    const handleAddRent = () => {
-        const newId = `dist-${Date.now()}`
-        const newItem: DistributionItem = {
-            id: newId,
-            name: "New Property Rent",
-            amount: 0,
-            status: "Pending",
-            holders: 0
+        const amountNum = parseFloat(amount)
+        if (isNaN(amountNum) || amountNum <= 0) {
+            toast.error("Please enter a valid amount")
+            return
         }
-        setDistributions(prev => [newItem, ...prev])
-        // Automatically start editing the new item
-        setEditingId(newId)
-        setEditAmount("0")
+
+        if (!description.trim()) {
+            toast.error("Please enter a description")
+            return
+        }
+
+        setIsLoading(true)
+        setCurrentStep("step1")
+
+        try {
+            // Convert to USDC amount (6 decimals)
+            const usdcAmount = parseUnits(amount, 6)
+
+            // Step 1: Approve USDC
+            toast.info("Step 1/2: Approving USDC...")
+
+            const approveResult = await new Promise<boolean>((resolve) => {
+                const timeoutId = setTimeout(() => {
+                    resolve(false)
+                }, 30000) // 30 second timeout
+
+                try {
+                    approve({
+                        address: USDC_ADDRESS,
+                        abi: [
+                            {
+                                name: "approve",
+                                type: "function",
+                                stateMutability: "nonpayable",
+                                inputs: [
+                                    { name: "spender", type: "address" },
+                                    { name: "amount", type: "uint256" }
+                                ],
+                                outputs: [{ name: "", type: "bool" }]
+                            }
+                        ],
+                        functionName: "approve",
+                        args: [propertyAddress, usdcAmount],
+                        // @ts-ignore - wagmi callback
+                        onSuccess: () => {
+                            clearTimeout(timeoutId)
+                            resolve(true)
+                        },
+                        onError: () => {
+                            clearTimeout(timeoutId)
+                            resolve(false)
+                        }
+                    } as any)
+                } catch (err) {
+                    clearTimeout(timeoutId)
+                    resolve(false)
+                }
+            })
+
+            if (!approveResult) {
+                toast.error("USDC approval failed or timed out")
+                setIsLoading(false)
+                setCurrentStep(null)
+                return
+            }
+
+            // Small delay to ensure approval is confirmed
+            await new Promise(resolve => setTimeout(resolve, 1000))
+
+            // Step 2: Distribute Revenue
+            setCurrentStep("step2")
+            toast.info("Step 2/2: Distributing revenue...")
+
+            const distributeResult = await new Promise<boolean>((resolve) => {
+                const timeoutId = setTimeout(() => {
+                    resolve(false)
+                }, 30000) // 30 second timeout
+
+                try {
+                    invest({
+                        address: propertyAddress,
+                        abi: PropertyTokenABI,
+                        functionName: "distributeRevenue",
+                        args: [usdcAmount, description],
+                        // @ts-ignore - wagmi callback
+                        onSuccess: () => {
+                            clearTimeout(timeoutId)
+                            resolve(true)
+                        },
+                        onError: () => {
+                            clearTimeout(timeoutId)
+                            resolve(false)
+                        }
+                    } as any)
+                } catch (err) {
+                    clearTimeout(timeoutId)
+                    resolve(false)
+                }
+            })
+
+            if (!distributeResult) {
+                toast.error("Revenue distribution failed or timed out")
+                setIsLoading(false)
+                setCurrentStep(null)
+                return
+            }
+
+            // Success
+            setAmount("")
+            setDescription("")
+            toast.success("Revenue distributed successfully!")
+            setIsLoading(false)
+            setCurrentStep(null)
+
+        } catch (error: any) {
+            console.error("Distribution error:", error)
+            toast.error(error?.message || "Distribution failed")
+            setIsLoading(false)
+            setCurrentStep(null)
+        }
     }
 
     return (
-        <div className="container py-12 max-w-4xl px-4 mx-auto">
-            <div className="flex items-center justify-between mb-8">
-                <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-                <Button onClick={handleAddRent} className="gap-2 bg-brand-green text-black hover:bg-brand-green/90">
-                    <Plus className="h-4 w-4" /> Record New Rent
-                </Button>
-            </div>
+        <Card className="overflow-hidden">
+            <CardContent className="p-6">
+                <div className="flex items-start gap-4">
+                    {/* Property Image */}
+                    <div className="h-20 w-20 rounded-md bg-muted overflow-hidden relative flex-shrink-0">
+                        <Image
+                            src={property.imageUrl}
+                            alt={property.name}
+                            fill
+                            className="object-cover"
+                            unoptimized={property.imageUrl.includes('ipfs.io') || property.imageUrl.includes('gateway.pinata.cloud')}
+                        />
+                    </div>
 
-            <div className="grid gap-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Pending Distributions</CardTitle>
-                        <CardDescription>Manage and trigger monthly rental income distributions.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        {distributions.map((item) => (
-                            <div key={item.id} className="rounded-lg border p-4 bg-muted/30 transition-all hover:border-brand-green/50">
-                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    {/* Property Info & Form */}
+                    <div className="flex-1 space-y-4">
+                        <div>
+                            <h3 className="font-semibold text-lg">{property.name}</h3>
+                            <p className="text-sm text-muted-foreground">{property.location}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {property.investorCount} {property.investorCount === 1 ? 'Investor' : 'Investors'}
+                            </p>
+                        </div>
 
-                                    {/* Left: Info */}
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <h3 className="font-semibold">{item.name}</h3>
-                                            {item.status === "Distributed" && (
-                                                <Badge variant="secondary" className="bg-green-500/10 text-green-500 hover:bg-green-500/20">Distributed</Badge>
-                                            )}
-                                        </div>
-                                        <p className="text-sm text-muted-foreground">{item.holders > 0 ? `${item.holders} Token Holders` : "No holders yet"}</p>
-                                    </div>
-
-                                    {/* Middle: Amount (Editable) */}
-                                    <div className="flex items-center gap-2 min-w-[200px]">
-                                        {editingId === item.id ? (
-                                            <div className="flex items-center gap-2">
-                                                <div className="relative">
-                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                                    <Input
-                                                        type="number"
-                                                        value={editAmount}
-                                                        onChange={(e) => setEditAmount(e.target.value)}
-                                                        className="pl-6 w-32"
-                                                        step="0.01"
-                                                    />
-                                                </div>
-                                                <Button size="icon" variant="ghost" className="h-9 w-9 text-green-500 hover:text-green-600 hover:bg-green-500/10" onClick={saveEdit}>
-                                                    <Check className="h-4 w-4" />
-                                                </Button>
-                                                <Button size="icon" variant="ghost" className="h-9 w-9 text-red-500 hover:text-red-600 hover:bg-red-500/10" onClick={() => setEditingId(null)}>
-                                                    <X className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center gap-2 group cursor-pointer" onClick={() => item.status === "Pending" && startEditing(item)}>
-                                                <span className="text-2xl font-bold font-mono tracking-tight">
-                                                    ${item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                </span>
-                                                {item.status === "Pending" && (
-                                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                                                        <Pencil className="h-4 w-4" />
-                                                        <span className="sr-only">Edit Amount</span>
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Right: Action */}
-                                    <div>
-                                        {item.status === "Pending" ? (
-                                            <Button
-                                                onClick={() => handleDistribute(item.id, item.amount)}
-                                                disabled={loadingIds.includes(item.id) || editingId === item.id || item.amount <= 0}
-                                                variant="default" // Using default (green)
-                                                className="min-w-[140px]"
-                                            >
-                                                {loadingIds.includes(item.id) ? (
-                                                    <>
-                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Wallet className="mr-2 h-4 w-4" /> Distribute
-                                                    </>
-                                                )}
-                                            </Button>
-                                        ) : (
-                                            <Button variant="outline" disabled className="min-w-[140px] opacity-50">
-                                                Completed
-                                            </Button>
-                                        )}
-
+                        {/* Distribution Form */}
+                        <div className="grid gap-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-sm font-medium mb-1.5 block">Amount (USDC)</label>
+                                    <div className="relative">
+                                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            type="number"
+                                            value={amount}
+                                            onChange={(e) => setAmount(e.target.value)}
+                                            placeholder="0.00"
+                                            className="pl-9"
+                                            step="0.01"
+                                            disabled={isLoading}
+                                        />
                                     </div>
                                 </div>
+                                <div>
+                                    <label className="text-sm font-medium mb-1.5 block">Description</label>
+                                    <Input
+                                        type="text"
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                        placeholder="e.g. January 2026 Rent"
+                                        disabled={isLoading}
+                                    />
+                                </div>
                             </div>
-                        ))}
+
+                            <Button
+                                onClick={handleDistribute}
+                                disabled={isLoading || !amount || !description}
+                                className="w-full"
+                            >
+                                {isLoading ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        {currentStep === "step1" ? "Approving USDC..." : "Distributing..."}
+                                    </>
+                                ) : (
+                                    <>
+                                        <Wallet className="mr-2 h-4 w-4" />
+                                        Distribute Revenue
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
+
+export default function AdminPage() {
+    const { address } = useAccount()
+    const { properties } = useProperties()
+    const [myProperties, setMyProperties] = useState<PropertyForDistribution[]>([])
+    const [isLoading, setIsLoading] = useState(true)
+
+    // Filter properties owned by the current user
+    useEffect(() => {
+        const loadMyProperties = async () => {
+            if (!address || !properties || properties.length === 0) {
+                setMyProperties([])
+                setIsLoading(false)
+                return
+            }
+
+            try {
+                // For each property, check if the current user is the owner
+                const ownershipChecks = await Promise.all(
+                    properties.map(async (property) => {
+                        try {
+                            const propertyAddress = property.id as `0x${string}`
+
+                            // Use eth_call to check if user has ADMIN_ROLE
+                            // For simplicity, we'll check if user has any role by checking if they created it
+                            // In a real scenario, you'd want to call hasRole(ADMIN_ROLE, address)
+
+                            // For now, we'll show all properties (you can add role checking later)
+                            return {
+                                property,
+                                isOwner: true // TODO: Add proper role checking
+                            }
+                        } catch (error) {
+                            console.error(`Error checking ownership for ${property.id}:`, error)
+                            return { property, isOwner: false }
+                        }
+                    })
+                )
+
+                const ownedProperties = ownershipChecks
+                    .filter(check => check.isOwner)
+                    .map(check => ({
+                        id: check.property.id,
+                        name: check.property.title,
+                        location: check.property.location,
+                        imageUrl: check.property.imageUrl,
+                        investorCount: check.property.investorCount
+                    }))
+
+                setMyProperties(ownedProperties)
+            } catch (error) {
+                console.error("Error loading properties:", error)
+            } finally {
+                setIsLoading(false)
+            }
+        }
+
+        loadMyProperties()
+    }, [address, properties])
+
+    if (!address) {
+        return (
+            <div className="container py-12 max-w-4xl px-4 mx-auto">
+                <Card>
+                    <CardContent className="py-12 text-center">
+                        <Wallet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                        <h3 className="text-lg font-semibold mb-2">Connect Your Wallet</h3>
+                        <p className="text-muted-foreground">
+                            Please connect your wallet to access the admin dashboard
+                        </p>
                     </CardContent>
                 </Card>
             </div>
+        )
+    }
+
+    return (
+        <div className="container py-12 max-w-6xl px-4 mx-auto">
+            <div className="mb-8">
+                <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
+                <p className="text-muted-foreground">Distribute rental income to your property investors</p>
+            </div>
+
+            {isLoading ? (
+                <Card>
+                    <CardContent className="py-12 text-center">
+                        <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin text-muted-foreground" />
+                        <p className="text-muted-foreground">Loading your properties...</p>
+                    </CardContent>
+                </Card>
+            ) : myProperties.length === 0 ? (
+                <Card>
+                    <CardContent className="py-12 text-center">
+                        <h3 className="text-lg font-semibold mb-2">No Properties Found</h3>
+                        <p className="text-muted-foreground mb-6">
+                            You don't own any properties yet. Create a property to start distributing revenue.
+                        </p>
+                        <Button asChild>
+                            <a href="/property/create">Create Property</a>
+                        </Button>
+                    </CardContent>
+                </Card>
+            ) : (
+                <div className="grid gap-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Your Properties</CardTitle>
+                            <CardDescription>
+                                Manage rental income distributions for {myProperties.length} {myProperties.length === 1 ? 'property' : 'properties'}
+                            </CardDescription>
+                        </CardHeader>
+                    </Card>
+
+                    {myProperties.map((property) => (
+                        <PropertyDistributionCard key={property.id} property={property} />
+                    ))}
+                </div>
+            )}
         </div>
     )
 }

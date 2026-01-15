@@ -79,12 +79,26 @@ export default function Home() {
 
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {properties.map(property => (
-              <PropertyCard key={property.id} property={property} />
-            ))}
-            {/* Placeholder for layout balance if needed */}
-          </div>
+          {properties.length === 0 ? (
+            <div className="text-center py-16 border border-dashed border-border rounded-lg">
+              <div className="mx-auto w-16 h-16 rounded-full bg-secondary flex items-center justify-center mb-4">
+                <Plus className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">No Properties Listed Yet</h3>
+              <p className="text-muted-foreground mb-6">Be the first to list a property on BrickFi</p>
+              <Button asChild>
+                <Link href="/property/create">
+                  <Plus className="h-4 w-4 mr-2" /> List Your Property
+                </Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {properties.map(property => (
+                <PropertyCard key={property.id} property={property} />
+              ))}
+            </div>
+          )}
           <div className="mt-12 text-center md:hidden">
             <Button variant="ghost" className="gap-2">
               View All <ArrowRight className="h-4 w-4" />

@@ -1,3 +1,5 @@
+import { AIInsights } from "@/types/metadata"
+
 export interface Property {
     id: string
     title: string
@@ -8,9 +10,11 @@ export interface Property {
     minInvestment: string
     totalValue: string
     funded: number
+    investorCount: number
     description: string
     tags: string[]
     tokenSymbol: string
+    aiInsights?: AIInsights | null // AI-generated insights from metadata
 }
 
 export const PROPERTIES: Property[] = [
@@ -24,6 +28,7 @@ export const PROPERTIES: Property[] = [
         minInvestment: "$50",
         totalValue: "$1,250,000",
         funded: 82,
+        investorCount: 124,
         description: "Ultra-luxury 2-bedroom apartment with direct views of Burj Khalifa. Located in the heart of Downtown, offering premium amenities and high short-term rental demand from tourists.",
         tags: ["Prime Location", "Luxury", "Short-term"],
         tokenSymbol: "ADS",
@@ -38,6 +43,7 @@ export const PROPERTIES: Property[] = [
         minInvestment: "$50",
         totalValue: "$850,000",
         funded: 45,
+        investorCount: 67,
         description: "Modern 1-bedroom unit in Dubai Marina with stunning canal views. High occupancy rates year-round due to proximity to JBR beach and Marina Walk.",
         tags: ["High Yield", "Waterfront", "Stable"],
         tokenSymbol: "MGW",
@@ -52,6 +58,7 @@ export const PROPERTIES: Property[] = [
         minInvestment: "$50",
         totalValue: "$5,500,000",
         funded: 12,
+        investorCount: 23,
         description: "Exclusive beachfront villa on the iconic Palm Jumeirah Frond. Represents the pinnacle of luxury living with private beach access and high capital appreciation potential.",
         tags: ["Trophy Asset", "Beachfront", "Exclusive"],
         tokenSymbol: "SVP",

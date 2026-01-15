@@ -2,13 +2,14 @@
 
 import { useState } from "react"
 import { Property } from "@/data/properties"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Wallet, Info } from "lucide-react"
-import { CountUp } from "@/components/ui/count-up"
+import { Info } from "lucide-react"
+import { PropertyInvestButton } from "./property-invest-button"
+import { usePropertyToken } from "@/hooks/usePropertyToken"
+import { useAccount } from "wagmi"
+import { formatUnits } from "viem"
 
 interface InvestmentPanelProps {
     property: Property
@@ -16,6 +17,38 @@ interface InvestmentPanelProps {
 
 export function InvestmentPanel({ property }: InvestmentPanelProps) {
     const [amount, setAmount] = useState<string>("50")
+    const { address } = useAccount()
+    const propertyAddress = property.id as `0x${string}`
+
+    // Fetch property token data
+    const { propertyInfo } = usePropertyToken(propertyAddress)
+
+    // Calculate estimated tokens and monthly income
+    const investAmount = parseFloat(amount) || 0
+    const platformFee = investAmount * 0.02
+    const amountAfterFee = investAmount - platformFee
+    const tokenPrice = 50 // $50 per token
+    const estimatedTokens = amountAfterFee / tokenPrice
+
+    // Calculate projected monthly income based on token ownership
+    let monthlyIncome = 0
+
+    if (propertyInfo && Array.isArray(propertyInfo) && propertyInfo.length >= 5) {
+        try {
+            const totalValue = Number(formatUnits(propertyInfo[2], 6)) // totalValue from PropertyInfo (index 2)
+            const expectedMonthlyIncome = Number(formatUnits(propertyInfo[3], 6)) // expectedMonthlyIncome from PropertyInfo (index 3)
+
+            // Calculate total token supply (totalValue / $50 per token)
+            const totalTokenSupply = totalValue / tokenPrice
+
+            // User's share = (user's tokens / total tokens) * monthly income
+            if (totalTokenSupply > 0 && !isNaN(expectedMonthlyIncome) && !isNaN(totalValue)) {
+                monthlyIncome = (estimatedTokens / totalTokenSupply) * expectedMonthlyIncome
+            }
+        } catch (error) {
+            console.error('Error calculating monthly income:', error)
+        }
+    }
 
     return (
         <Card className="border-border/50 shadow-md h-fit sticky top-24">
@@ -26,7 +59,7 @@ export function InvestmentPanel({ property }: InvestmentPanelProps) {
             <CardContent className="space-y-6">
                 <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                        <Label htmlFor="amount">Investment Amount</Label>
+                        <Label htmlFor="amount">Investment Amount (USDC)</Label>
                         <span className="text-muted-foreground">Min: {property.minInvestment}</span>
                     </div>
                     <div className="relative">
@@ -37,71 +70,58 @@ export function InvestmentPanel({ property }: InvestmentPanelProps) {
                             min={50}
                             step={50}
                             value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
+                            onChange={(e) => {
+                                const value = e.target.value
+                                // Allow empty string for user to clear and type
+                                if (value === '') {
+                                    setAmount('')
+                                    return
+                                }
+                                // Round to nearest 50
+                                const numValue = parseFloat(value)
+                                if (!isNaN(numValue)) {
+                                    const rounded = Math.round(numValue / 50) * 50
+                                    setAmount(rounded.toString())
+                                }
+                            }}
+                            onBlur={(e) => {
+                                // Ensure minimum of 50 on blur
+                                const numValue = parseFloat(e.target.value)
+                                if (isNaN(numValue) || numValue < 50) {
+                                    setAmount('50')
+                                }
+                            }}
                             className="pl-7"
                         />
                     </div>
                 </div>
 
                 <div className="rounded-lg bg-secondary/50 p-4 space-y-3 text-sm">
-                    <div className="flex justify-between">
-                        <span className="text-muted-foreground">Investment (Base)</span>
-                        <div className="flex items-center">
-                            <span className="text-muted-foreground mr-1">$</span>
-                            <CountUp value={Number(amount) || 0} decimals={2} />
-                        </div>
+                    <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Est. Tokens</span>
+                        <span className="font-semibold text-foreground">{estimatedTokens.toFixed(2)} {property.tokenSymbol}</span>
                     </div>
-                    <div className="flex justify-between">
-                        <span className="text-muted-foreground">Platform Fee (2%)</span>
-                        <div className="flex items-center text-muted-foreground">
-                            <span className="mr-1">+</span>
-                            <span>$</span>
-                            <CountUp value={(Number(amount) || 0) * 0.02} decimals={2} />
-                        </div>
-                    </div>
-                    <div className="border-t border-border/50 my-2" />
-                    <div className="flex justify-between font-bold text-lg">
-                        <span>Total Pay</span>
-                        <div className="flex items-center text-brand-green">
-                            <span className="mr-1">$</span>
-                            <CountUp value={(Number(amount) || 0) * 1.02} decimals={2} />
-                        </div>
-                    </div>
-
-                    <div className="mt-4 pt-2 border-t border-dashed border-border/50">
-                        <div className="flex justify-between items-center text-xs text-muted-foreground mb-1">
-                            <span>You Receive (100%)</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-lg font-bold text-white">
-                                <CountUp value={Number(amount) || 0} decimals={0} suffix={` ${property.tokenSymbol}`} />
-                            </span>
-
-                        </div>
-                    </div>
-
-                    <div className="flex justify-between text-xs mt-2">
+                    <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Proj. Monthly Income</span>
-                        <span className="text-brand-gold flex items-center gap-1">
-                            $
-                            <CountUp value={(Number(amount) || 0) * 0.006} decimals={2} />
-                            <span>/ mo</span>
+                        <span className="font-semibold text-brand-gold">
+                            ${monthlyIncome.toFixed(2)} / mo
                         </span>
                     </div>
+                    <div className="border-t border-border/50 my-2" />
+                    <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Platform Fee</span>
+                        <span className="font-medium text-foreground">${platformFee.toFixed(2)} (2%)</span>
+                    </div>
                 </div>
 
-                <div className="flex items-start gap-2 text-xs text-muted-foreground bg-blue-500/10 p-3 rounded-md">
-                    <Info className="h-4 w-4 shrink-0 mt-0.5 text-blue-500" />
-                    <p>Distributions trigger automatically every month via smart contract.</p>
-                </div>
-            </CardContent>
-            <CardFooter>
-                <Button className="w-full relative overflow-hidden group" size="lg" variant="premium">
-                    <div className="absolute inset-0 bg-brand-green/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                    <Wallet className="mr-2 h-4 w-4 relative z-10" />
-                    <span className="relative z-10">Confirm Investment</span>
-                </Button>
-            </CardFooter>
-        </Card>
+
+                <PropertyInvestButton
+                    propertyTokenAddress={propertyAddress}
+                    propertyName={property.title}
+                    investAmount={amount}
+                />
+            </CardContent >
+
+        </Card >
     )
 }

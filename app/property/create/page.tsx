@@ -4,48 +4,57 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { useProperties } from "@/context/property-context"
-import { Property } from "@/data/properties"
+import { usePropertyFactory } from "@/hooks/usePropertyFactory"
 import { useRouter } from "next/navigation"
-import { useState, FormEvent } from "react"
 import { toast } from "sonner"
 import { ArrowLeft, Upload } from "lucide-react"
+import { useAccount } from "wagmi"
+import { Property } from "@/data/properties"
+import { useState, FormEvent } from "react"
 
 export default function CreatePropertyPage() {
-    const { addProperty } = useProperties()
+    const { refetchProperties, addProperty } = useProperties()
+    const { address } = useAccount()
     const router = useRouter()
     const [loading, setLoading] = useState(false)
+
+    const {
+        createProperty,
+        isCreatingProperty,
+        isWaitingForCreate,
+        isCreateSuccess,
+        isCreatePropertyError,
+        createPropertyError
+    } = usePropertyFactory()
 
     // Form State
     const [formData, setFormData] = useState({
         title: "",
         location: "",
-        price: "",
-        monthlyIncome: "",
-        imageUrl: "", // Keeping this in state for now, though UI will show dropzone
+        totalValue: "",
+        yield: "",
+        imageUrl: "",
+        description: "",
+        tags: ""
     })
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault()
-        setLoading(true)
 
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 800))
-
-        const priceNum = parseFloat(formData.price)
-        const monthlyIncomeNum = parseFloat(formData.monthlyIncome)
-
-        // Basic Validation
-        if (!formData.title || !formData.price || isNaN(priceNum)) {
-            toast.error("Please fill in all strict fields correctly.")
-            setLoading(false)
+        if (!address) {
+            toast.error("Please connect your wallet")
             return
         }
 
-        // Calculate Yield: (Monthly * 12 / Total) * 100
-        let calculatedYield = "0"
-        if (!isNaN(monthlyIncomeNum) && !isNaN(priceNum) && priceNum > 0) {
-            calculatedYield = ((monthlyIncomeNum * 12) / priceNum * 100).toFixed(1)
+        const totalValueNum = parseFloat(formData.totalValue)
+        const yieldNum = parseFloat(formData.yield)
+
+        // Basic Validation
+        if (!formData.title || !formData.location || !formData.description || isNaN(totalValueNum) || isNaN(yieldNum)) {
+            toast.error("Please fill in all required fields correctly.")
+            return
         }
 
         // Generate random 3-4 uppercase letter token symbol
@@ -56,17 +65,23 @@ export default function CreatePropertyPage() {
             randomSymbol += possibleChars.charAt(Math.floor(Math.random() * possibleChars.length))
         }
 
+        // Parse tags
+        const tagsArray = formData.tags
+            ? formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
+            : ["New Listing"]
+
         const newProperty: Property = {
             id: `prop-${Date.now()}`,
             title: formData.title,
             location: formData.location,
             imageUrl: formData.imageUrl || "/dubai-downtown.png", // Default image if empty
-            projectedYield: calculatedYield + "%",
+            projectedYield: formData.yield + "%",
             minInvestment: "$50", // Default string
             funded: 0,
-            totalValue: "$" + priceNum.toLocaleString(),
-            description: "New user-listed property.",
-            tags: ["New Listing"],
+            investorCount: 0,
+            totalValue: "$" + totalValueNum.toLocaleString(),
+            description: formData.description,
+            tags: tagsArray.length > 0 ? tagsArray : ["New Listing"],
             tokenSymbol: randomSymbol
         }
 
@@ -74,7 +89,15 @@ export default function CreatePropertyPage() {
         toast.success("Property Listed Successfully!", {
             description: `${formData.title} has been added to the marketplace.`
         })
+        refetchProperties()
         router.push("/")
+    }
+
+    // Handle error
+    if (isCreatePropertyError && createPropertyError) {
+        toast.error("Property creation failed", {
+            description: createPropertyError.message
+        })
     }
 
     return (
@@ -97,10 +120,10 @@ export default function CreatePropertyPage() {
                     <form onSubmit={handleSubmit} className="space-y-6">
 
                         <div className="space-y-2">
-                            <Label htmlFor="title">Property Name</Label>
+                            <Label htmlFor="title">Property Title</Label>
                             <Input
                                 id="title"
-                                placeholder="e.g. Luxury Penthouse DIFC"
+                                placeholder="e.g. Luxury Penthouse in DIFC"
                                 value={formData.title}
                                 onChange={e => setFormData({ ...formData, title: e.target.value })}
                                 required
@@ -118,44 +141,79 @@ export default function CreatePropertyPage() {
                             />
                         </div>
 
+                        <div className="space-y-2">
+                            <Label htmlFor="description">Description *</Label>
+                            <Textarea
+                                id="description"
+                                placeholder="Describe the property, its features, location benefits, and investment potential..."
+                                value={formData.description}
+                                onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                required
+                                rows={4}
+                                className="resize-none"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                This description will be visible to investors on the property details page.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="tags">Tags (Optional)</Label>
+                            <Input
+                                id="tags"
+                                placeholder="e.g. Luxury, High Yield, Beachfront"
+                                value={formData.tags}
+                                onChange={e => setFormData({ ...formData, tags: e.target.value })}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Comma-separated tags to help investors find your property (e.g., "Luxury, Waterfront, High Yield")
+                            </p>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="price">Total Asset Value ($)</Label>
+                                <Label htmlFor="totalValue">Total Asset Value ($)</Label>
                                 <Input
-                                    id="price"
+                                    id="totalValue"
                                     type="number"
+                                    step="0.01"
                                     placeholder="2500000"
-                                    value={formData.price}
-                                    onChange={e => setFormData({ ...formData, price: e.target.value })}
+                                    value={formData.totalValue}
+                                    onChange={e => setFormData({ ...formData, totalValue: e.target.value })}
                                     required
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="monthlyIncome">Expected Monthly Income ($)</Label>
+                                <Label htmlFor="yield">Projected Annual Yield (%)</Label>
                                 <Input
-                                    id="monthlyIncome"
-                                    placeholder="12500"
-                                    value={formData.monthlyIncome}
-                                    onChange={e => setFormData({ ...formData, monthlyIncome: e.target.value })}
+                                    id="yield"
+                                    placeholder="6.5"
+                                    value={formData.yield}
+                                    onChange={e => setFormData({ ...formData, yield: e.target.value })}
                                     required
                                 />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Property Images *</Label>
-                            <div className="border-2 border-dashed border-gray-200 rounded-lg py-12 px-4 flex flex-col items-center justify-center text-center hover:bg-gray-50 transition-colors cursor-pointer group">
-                                <Upload className="h-10 w-10 text-brand-green mb-4 group-hover:scale-110 transition-transform" />
-                                <p className="text-brand-green font-medium mb-1">
-                                    Click to upload <span className="text-muted-foreground font-normal">or drag and drop</span>
-                                </p>
-                                <p className="text-xs text-muted-foreground">1-3 images (PNG, JPG, max 10MB each)</p>
+                            <Label htmlFor="image">Image URL (Optional)</Label>
+                            <div className="flex gap-2">
+                                <Input
+                                    id="image"
+                                    placeholder="https://..."
+                                    value={formData.imageUrl}
+                                    onChange={e => setFormData({ ...formData, imageUrl: e.target.value })}
+                                />
+                                <Button type="button" variant="outline" size="icon" disabled>
+                                    <Upload className="h-4 w-4" />
+                                </Button>
                             </div>
+                            <p className="text-xs text-muted-foreground">Leave empty to use a default luxury placeholder.</p>
                         </div>
 
                         <div className="pt-4 flex justify-end">
-                            <Button type="submit" size="lg" disabled={loading} className="bg-brand-green text-black hover:bg-brand-green/90 w-full md:w-auto min-w-[150px]">
-                                {loading ? "Connecting..." : "Connect Wallet"}
+                            <Button type="submit" size="lg" disabled={loading} className="bg-brand-green text-black hover:bg-brand-green/90 w-full md:w-auto">
+                                {loading ? "Listing..." : "List Property"}
                             </Button>
                         </div>
 

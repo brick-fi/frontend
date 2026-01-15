@@ -1,7 +1,8 @@
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { PropertyFactoryABI } from '@/lib/abis/PropertyFactory'
+import { CONTRACTS } from '@/lib/contracts'
 
-const PROPERTY_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_PROPERTY_FACTORY_ADDRESS as `0x${string}`
+const PROPERTY_FACTORY_ADDRESS = CONTRACTS.PROPERTY_FACTORY
 
 export function usePropertyFactory() {
   // Read: Get all properties count
