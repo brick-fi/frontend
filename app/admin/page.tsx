@@ -32,7 +32,7 @@ function PropertyDistributionCard({ property }: { property: PropertyForDistribut
     const { distributeRevenue, isDistributing, isWaitingForDistribute, isDistributeSuccess, distributeError } = usePropertyToken(propertyAddress)
     const { address } = useAccount()
     const usdcAddress = process.env.NEXT_PUBLIC_DEMO_USDC_ADDRESS as `0x${string}`
-    const { approve, isApproveSuccess } = useDemoUSDC(usdcAddress)
+    const { approve, isApproveSuccess } = useDemoUSDC()
 
     // Track state for flow
     const [approvalAmount, setApprovalAmount] = useState<bigint | null>(null)
