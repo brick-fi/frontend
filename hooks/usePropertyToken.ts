@@ -82,17 +82,14 @@ export function usePropertyToken(propertyTokenAddress?: Address) {
     functionName: 'getDistributionCount',
   })
 
-  // Read: Get pending revenue for user
-  const getPendingRevenue = (userAddress?: Address, distributionId?: number) => {
-    return useReadContract({
-      address: propertyTokenAddress,
-      abi: PropertyTokenABI,
-      functionName: 'getPendingRevenue',
-      args: userAddress && distributionId !== undefined ? [userAddress, BigInt(distributionId)] : undefined,
-    })
-  }
+  // Read: Get minimum investment
+  const { data: minInvestment } = useReadContract({
+    address: propertyTokenAddress,
+    abi: PropertyTokenABI,
+    functionName: 'getMinInvestment',
+  })
 
-  // Write: Invest
+  // Write: Invest (with 2% fee included in totalAmount)
   const {
     writeContract: invest,
     data: investHash,
@@ -109,21 +106,21 @@ export function usePropertyToken(propertyTokenAddress?: Address) {
     hash: investHash,
   })
 
-  // Write: Claim revenue
+  // Write: Distribute revenue
   const {
-    writeContract: claimRevenue,
-    data: claimHash,
-    isPending: isClaiming,
-    isError: isClaimError,
-    error: claimError,
+    writeContract: distributeRevenue,
+    data: distributeHash,
+    isPending: isDistributing,
+    isError: isDistributeError,
+    error: distributeError,
   } = useWriteContract()
 
-  // Wait for claim transaction
+  // Wait for distribute transaction
   const {
-    isLoading: isWaitingForClaim,
-    isSuccess: isClaimSuccess
+    isLoading: isWaitingForDistribute,
+    isSuccess: isDistributeSuccess
   } = useWaitForTransactionReceipt({
-    hash: claimHash,
+    hash: distributeHash,
   })
 
   return {
@@ -140,7 +137,6 @@ export function usePropertyToken(propertyTokenAddress?: Address) {
     getUserBalance,
     getUserInvestmentAmount,
     getUserProjectedMonthlyIncome,
-    getPendingRevenue,
 
     // Invest
     invest,
@@ -150,12 +146,12 @@ export function usePropertyToken(propertyTokenAddress?: Address) {
     isInvestError,
     investError,
 
-    // Claim
-    claimRevenue,
-    isClaiming,
-    isWaitingForClaim,
-    isClaimSuccess,
-    isClaimError,
-    claimError,
+    // Distribute revenue
+    distributeRevenue,
+    isDistributing,
+    isWaitingForDistribute,
+    isDistributeSuccess,
+    isDistributeError,
+    distributeError,
   }
 }

@@ -27,14 +27,49 @@ function PropertyDistributionCard({ property }: { property: PropertyForDistribut
     const [amount, setAmount] = useState("")
     const [description, setDescription] = useState("")
     const [isLoading, setIsLoading] = useState(false)
-    const [currentStep, setCurrentStep] = useState<"step1" | "step2" | null>(null)
 
     const propertyAddress = property.id as `0x${string}`
-    const { invest } = usePropertyToken(propertyAddress)
+    const { distributeRevenue, isDistributing, isWaitingForDistribute, isDistributeSuccess, distributeError } = usePropertyToken(propertyAddress)
     const { address } = useAccount()
-    const { approve } = useDemoUSDC()
+    const usdcAddress = process.env.NEXT_PUBLIC_DEMO_USDC_ADDRESS as `0x${string}`
+    const { approve, isApproveSuccess } = useDemoUSDC(usdcAddress)
 
-    const USDC_ADDRESS = process.env.NEXT_PUBLIC_DEMO_USDC_ADDRESS as `0x${string}`
+    // Track state for flow
+    const [approvalAmount, setApprovalAmount] = useState<bigint | null>(null)
+    const [approvalDescription, setApprovalDescription] = useState<string>("")
+
+    useEffect(() => {
+        // After approval succeeds, trigger distribution
+        if (isApproveSuccess && approvalAmount !== null) {
+            toast.info("Approving successful! Distributing revenue to all investors...")
+            setTimeout(() => {
+                distributeRevenue({
+                    address: propertyAddress,
+                    abi: PropertyTokenABI,
+                    functionName: "distributeRevenue",
+                    args: [approvalAmount, approvalDescription],
+                } as any)
+                setApprovalAmount(null)
+                setApprovalDescription("")
+            }, 500)
+        }
+    }, [isApproveSuccess])
+
+    useEffect(() => {
+        if (isDistributeSuccess) {
+            toast.success("Revenue distributed successfully! All investors will receive their automatic distribution.")
+            setAmount("")
+            setDescription("")
+            setIsLoading(false)
+        }
+    }, [isDistributeSuccess])
+
+    useEffect(() => {
+        if (distributeError) {
+            toast.error(distributeError?.message || "Failed to distribute revenue")
+            setIsLoading(false)
+        }
+    }, [distributeError])
 
     const handleDistribute = async () => {
         if (!address) {
@@ -53,114 +88,42 @@ function PropertyDistributionCard({ property }: { property: PropertyForDistribut
             return
         }
 
-        setIsLoading(true)
-        setCurrentStep("step1")
-
         try {
             // Convert to USDC amount (6 decimals)
             const usdcAmount = parseUnits(amount, 6)
 
+            // Store for next step
+            setApprovalAmount(usdcAmount)
+            setApprovalDescription(description)
+
             // Step 1: Approve USDC
-            toast.info("Step 1/2: Approving USDC...")
+            toast.info("Approving USDC...")
+            setIsLoading(true)
 
-            const approveResult = await new Promise<boolean>((resolve) => {
-                const timeoutId = setTimeout(() => {
-                    resolve(false)
-                }, 30000) // 30 second timeout
-
-                try {
-                    approve({
-                        address: USDC_ADDRESS,
-                        abi: [
-                            {
-                                name: "approve",
-                                type: "function",
-                                stateMutability: "nonpayable",
-                                inputs: [
-                                    { name: "spender", type: "address" },
-                                    { name: "amount", type: "uint256" }
-                                ],
-                                outputs: [{ name: "", type: "bool" }]
-                            }
-                        ],
-                        functionName: "approve",
-                        args: [propertyAddress, usdcAmount],
-                        // @ts-ignore - wagmi callback
-                        onSuccess: () => {
-                            clearTimeout(timeoutId)
-                            resolve(true)
-                        },
-                        onError: () => {
-                            clearTimeout(timeoutId)
-                            resolve(false)
-                        }
-                    } as any)
-                } catch (err) {
-                    clearTimeout(timeoutId)
-                    resolve(false)
+            const ERC20_ABI = [
+                {
+                    name: "approve",
+                    type: "function",
+                    stateMutability: "nonpayable",
+                    inputs: [
+                        { name: "spender", type: "address" },
+                        { name: "amount", type: "uint256" }
+                    ],
+                    outputs: [{ name: "", type: "bool" }]
                 }
+            ] as const
+
+            approve({
+                address: usdcAddress,
+                abi: ERC20_ABI,
+                functionName: "approve",
+                args: [propertyAddress, usdcAmount],
             })
-
-            if (!approveResult) {
-                toast.error("USDC approval failed or timed out")
-                setIsLoading(false)
-                setCurrentStep(null)
-                return
-            }
-
-            // Small delay to ensure approval is confirmed
-            await new Promise(resolve => setTimeout(resolve, 1000))
-
-            // Step 2: Distribute Revenue
-            setCurrentStep("step2")
-            toast.info("Step 2/2: Distributing revenue...")
-
-            const distributeResult = await new Promise<boolean>((resolve) => {
-                const timeoutId = setTimeout(() => {
-                    resolve(false)
-                }, 30000) // 30 second timeout
-
-                try {
-                    invest({
-                        address: propertyAddress,
-                        abi: PropertyTokenABI,
-                        functionName: "distributeRevenue",
-                        args: [usdcAmount, description],
-                        // @ts-ignore - wagmi callback
-                        onSuccess: () => {
-                            clearTimeout(timeoutId)
-                            resolve(true)
-                        },
-                        onError: () => {
-                            clearTimeout(timeoutId)
-                            resolve(false)
-                        }
-                    } as any)
-                } catch (err) {
-                    clearTimeout(timeoutId)
-                    resolve(false)
-                }
-            })
-
-            if (!distributeResult) {
-                toast.error("Revenue distribution failed or timed out")
-                setIsLoading(false)
-                setCurrentStep(null)
-                return
-            }
-
-            // Success
-            setAmount("")
-            setDescription("")
-            toast.success("Revenue distributed successfully!")
-            setIsLoading(false)
-            setCurrentStep(null)
 
         } catch (error: any) {
             console.error("Distribution error:", error)
             toast.error(error?.message || "Distribution failed")
             setIsLoading(false)
-            setCurrentStep(null)
         }
     }
 
@@ -221,13 +184,13 @@ function PropertyDistributionCard({ property }: { property: PropertyForDistribut
 
                             <Button
                                 onClick={handleDistribute}
-                                disabled={isLoading || !amount || !description}
+                                disabled={isLoading || isDistributing || isWaitingForDistribute || !amount || !description}
                                 className="w-full"
                             >
-                                {isLoading ? (
+                                {isLoading || isDistributing || isWaitingForDistribute ? (
                                     <>
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        {currentStep === "step1" ? "Approving USDC..." : "Distributing..."}
+                                        {isLoading ? "Approving USDC..." : "Distributing..."}
                                     </>
                                 ) : (
                                     <>
