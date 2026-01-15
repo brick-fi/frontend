@@ -19,9 +19,9 @@ interface PropertyContextType {
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined)
 
 export function PropertyProvider({ children }: { children: ReactNode }) {
-    const [properties, setProperties] = useState<Property[]>(PROPERTIES)
+    const [properties, setProperties] = useState<Property[]>([])
     const [favorites, setFavorites] = useState<string[]>([])
-    const [isLoading, setIsLoading] = useState(false) // Default to false since we have data
+    const [isLoading, setIsLoading] = useState(true) // Default to true while loading blockchain data
 
     const { propertiesDetails, refetchProperties } = usePropertyFactory()
 
@@ -104,9 +104,8 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
                     })
                 )
 
-                // Merge contract properties with static properties
-                // Avoid duplicates if any logic needed, but IDs are different types usually
-                setProperties([...PROPERTIES, ...contractProperties])
+                // Use only contract properties (no more static data)
+                setProperties(contractProperties)
                 setIsLoading(false)
             }
 

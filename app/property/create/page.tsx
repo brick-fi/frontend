@@ -240,7 +240,7 @@ export default function CreatePropertyPage() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ metadata }),
+                body: JSON.stringify(metadata), // metadata를 직접 전달 (감싸지 않음)
             })
 
             if (!metadataResponse.ok) {
