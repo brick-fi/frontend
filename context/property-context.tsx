@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react"
-import { Property } from "@/data/properties"
+import { Property, PROPERTIES } from "@/data/properties"
 import { usePropertyFactory } from "@/hooks/usePropertyFactory"
 import { formatUnits } from "viem"
 import { PropertyMetadata } from "@/types/metadata"
@@ -19,15 +19,15 @@ interface PropertyContextType {
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined)
 
 export function PropertyProvider({ children }: { children: ReactNode }) {
-    const [properties, setProperties] = useState<Property[]>([])
+    const [properties, setProperties] = useState<Property[]>(PROPERTIES)
     const [favorites, setFavorites] = useState<string[]>([])
-    const [isLoading, setIsLoading] = useState(true)
+    const [isLoading, setIsLoading] = useState(false) // Default to false since we have data
 
     const { propertiesDetails, refetchProperties } = usePropertyFactory()
 
     // Load contract properties when available
     useEffect(() => {
-        if (propertiesDetails && Array.isArray(propertiesDetails)) {
+        if (propertiesDetails && Array.isArray(propertiesDetails) && propertiesDetails.length > 0) {
             const loadPropertiesWithMetadata = async () => {
                 const contractProperties: Property[] = await Promise.all(
                     propertiesDetails.map(async (detail: any) => {
@@ -104,7 +104,9 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
                     })
                 )
 
-                setProperties(contractProperties)
+                // Merge contract properties with static properties
+                // Avoid duplicates if any logic needed, but IDs are different types usually
+                setProperties([...PROPERTIES, ...contractProperties])
                 setIsLoading(false)
             }
 

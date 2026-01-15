@@ -305,7 +305,7 @@ export default function AdminPage() {
 
     if (!address) {
         return (
-            <div className="container py-12 max-w-4xl px-4">
+            <div className="container py-12 max-w-4xl px-4 mx-auto">
                 <Card>
                     <CardContent className="py-12 text-center">
                         <Wallet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -320,7 +320,7 @@ export default function AdminPage() {
     }
 
     return (
-        <div className="container py-12 max-w-6xl px-4">
+        <div className="container py-12 max-w-6xl px-4 mx-auto">
             <div className="mb-8">
                 <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
                 <p className="text-muted-foreground">Distribute rental income to your property investors</p>

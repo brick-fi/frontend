@@ -12,25 +12,24 @@ export default function Home() {
   return (
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
-      {/* Hero Section */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden bg-black">
         {/* Background Overlay */}
-        <div className="absolute inset-0 bg-[url('/hero-bg.png')] bg-cover bg-center opacity-60 scale-105 animate-in fade-in duration-1000"></div>
+        <div className="absolute inset-0 bg-[url('/hero-bg.png')] bg-cover bg-center opacity-60"></div>
         <div className="absolute inset-0 bg-gradient-to-t from-background via-black/50 to-transparent"></div>
 
         <div className="container relative z-10 px-4 md:px-8 text-center max-w-5xl mx-auto space-y-8 pt-20">
-          <div className="inline-block px-4 py-1.5 rounded-full border border-brand-green/30 bg-brand-green/10 text-brand-green text-sm font-medium tracking-wide mb-4 animate-in slide-in-from-bottom-4 fade-in duration-1000 delay-300">
+          <div className="inline-block px-4 py-1.5 rounded-full border border-brand-green/30 bg-brand-green/10 text-brand-green text-sm font-medium tracking-wide mb-4">
             The Future of Real Estate Investment
           </div>
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter text-white leading-[0.9] animate-in slide-in-from-bottom-8 fade-in duration-1000 delay-500">
-            BE THE <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-green to-emerald-400">LANDLORD</span><br />
-            BY ONE CLICK
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter text-white leading-[0.9]">
+            Build global <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-green to-emerald-400">REAL ESTATE INCOME</span><br />
+            from just $50
           </h1>
-          <p className="text-xl md:text-2xl text-gray-300 max-w-2xl mx-auto leading-relaxed font-light animate-in slide-in-from-bottom-8 fade-in duration-1000 delay-700">
-            Easiest fractional ownership, powered by DeFi. <br />
-            Start building your property empire from just <span className="text-brand-green font-bold">$50</span>.
+          <p className="text-xl md:text-2xl text-gray-300 max-w-2xl mx-auto leading-relaxed font-light">
+            Easiest fractional real estate access, powered by DeFi.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-8 animate-in slide-in-from-bottom-8 fade-in duration-1000 delay-1000">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-8">
             <Button
               size="lg"
               className="w-full sm:w-auto text-lg px-10 h-14 rounded-full bg-brand-green hover:bg-brand-green/90 text-black font-bold shadow-[0_0_20px_rgba(10,191,83,0.3)] transition-all hover:scale-105"
@@ -116,7 +115,7 @@ export default function Home() {
               <div className="mx-auto w-12 h-12 rounded-full bg-brand-gold/20 flex items-center justify-center text-brand-gold">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-coins"><circle cx="8" cy="8" r="6" /><path d="M18.09 10.37A6 6 0 1 1 10.34 18" /><path d="M7 6h1v4" /><path d="m16.71 13.88.7.71-2.82 8.48-4-12.09-1.95 2.47" /></svg>
               </div>
-              <h3 className="text-xl font-bold">Monthly Cashflow</h3>
+              <h3 className="text-xl font-bold">Monthly Income</h3>
               <p className="text-muted-foreground leading-relaxed">Rent collected is automatically distributed to your wallet via smart contracts.</p>
             </div>
             <div className="space-y-4">
@@ -139,3 +138,5 @@ export default function Home() {
     </div>
   )
 }
+
+

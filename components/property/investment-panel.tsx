@@ -53,7 +53,7 @@ export function InvestmentPanel({ property }: InvestmentPanelProps) {
     return (
         <Card className="border-border/50 shadow-md h-fit sticky top-24">
             <CardHeader>
-                <CardTitle>Invest in Cashflow</CardTitle>
+                <CardTitle>Invest in Real Estate</CardTitle>
                 <CardDescription>Mint tokens to receive monthly rental income.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -114,17 +114,14 @@ export function InvestmentPanel({ property }: InvestmentPanelProps) {
                     </div>
                 </div>
 
-                <div className="flex items-start gap-2 text-xs text-muted-foreground bg-blue-500/10 p-3 rounded-md">
-                    <Info className="h-4 w-4 shrink-0 mt-0.5 text-blue-500" />
-                    <p>Distributions trigger automatically every month via smart contract.</p>
-                </div>
 
                 <PropertyInvestButton
                     propertyTokenAddress={propertyAddress}
                     propertyName={property.title}
                     investAmount={amount}
                 />
-            </CardContent>
-        </Card>
+            </CardContent >
+
+        </Card >
     )
 }

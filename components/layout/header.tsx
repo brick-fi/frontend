@@ -23,24 +23,25 @@ export function Header() {
                         </span>
                     </Link>
                     <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
-                        <Link href="/" className="transition-colors hover:text-foreground">
+                        <Link href="/#featured" className="transition-colors hover:text-foreground">
                             Marketplace
                         </Link>
                         <Link href="/portfolio" className="transition-colors hover:text-foreground">
                             Portfolio
                         </Link>
-                        <Link href="/admin" className="transition-colors hover:text-foreground text-brand-gold">
+
+                        <Link href="/admin" className="transition-colors hover:text-emerald-400 text-brand-green font-bold">
                             Admin
                         </Link>
-                    </nav>
-                </div>
+                    </nav >
+                </div >
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="sm" className="hidden sm:flex">
-                        How it works
+                    <Button asChild variant="ghost" size="sm" className="hidden sm:flex">
+                        <Link href="/about">About Us</Link>
                     </Button>
                     <ConnectButton />
                 </div>
-            </div>
-        </header>
+            </div >
+        </header >
     )
 }
