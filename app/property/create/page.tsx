@@ -192,21 +192,26 @@ export default function CreatePropertyPage() {
                                     id="totalValue"
                                     type="number"
                                     step="0.01"
-                                    placeholder="2500000"
+                                    placeholder="1250000"
                                     value={formData.totalValue}
                                     onChange={e => setFormData({ ...formData, totalValue: e.target.value })}
                                     required
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="yield">Projected Annual Yield (%)</Label>
+                                <Label htmlFor="yield">Expected Monthly Income ($)</Label>
                                 <Input
                                     id="yield"
-                                    placeholder="6.5"
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="6250"
                                     value={formData.yield}
                                     onChange={e => setFormData({ ...formData, yield: e.target.value })}
                                     required
                                 />
+                                <p className="text-xs text-muted-foreground">
+                                    Annual yield will be calculated as: (Monthly Income × 12 / Total Value) × 100%
+                                </p>
                             </div>
                         </div>
 
