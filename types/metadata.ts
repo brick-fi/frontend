@@ -7,6 +7,16 @@ export interface AIInsights {
   summary: string
 }
 
+export interface PropertyWorldModel {
+  provider: 'world_labs'
+  worldId: string | null
+  worldMarbleUrl: string | null
+  thumbnailUrl: string | null
+  panoUrl: string | null
+  spzUrls: Record<string, string>
+  colliderMeshUrl: string | null
+}
+
 /**
  * IPFS Metadata structure for tokenized properties
  * This metadata is permanently stored on IPFS and referenced by the smart contract
@@ -23,6 +33,7 @@ export interface PropertyMetadata {
 
   // Media
   images: string[] // Array of IPFS URIs (ipfs://...)
+  worldModel?: PropertyWorldModel | null
 
   // Tags (e.g., "Luxury", "High Yield", "Beachfront")
   tags: string[]

@@ -7,26 +7,143 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useProperties } from "@/context/property-context"
 import { usePropertyFactory } from "@/hooks/usePropertyFactory"
-import { useRouter } from "next/navigation"
-import { toast } from "sonner"
-import { ArrowLeft, Upload } from "lucide-react"
-import { useAccount } from "wagmi"
 import { PropertyFactoryABI } from "@/lib/abis/PropertyFactory"
 import { CONTRACTS } from "@/lib/contracts"
-import { useState, FormEvent, useEffect } from "react"
+import { buildDraftSignatureMessage } from "@/lib/property-generation/signature"
+import { ROOM_IMAGE_COUNT } from "@/lib/property-generation/types"
+import Image from "next/image"
+import { useRouter } from "next/navigation"
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react"
+import { useAccount, useSignMessage } from "wagmi"
+import { toast } from "sonner"
+import { ArrowLeft, Box, CheckCircle2, Loader2 } from "lucide-react"
 
-type UploadProgress = {
-    current: number
-    total: number
-    currentFileName: string
+type GenerationStage = 'idle' | 'uploading' | 'starting' | 'waiting_world_labs' | 'finalizing' | 'ready' | 'failed'
+
+interface DraftResponse {
+    draftId: string
+    status: string
+    draftAccessToken: string
+}
+
+interface StatusResponse {
+    job?: {
+        status: string
+        error: string | null
+    }
+    error?: string
+}
+
+interface FinalizeResponse {
+    metadataURI?: string
+    error?: string
+}
+
+interface ListingFormData {
+    title: string
+    location: string
+    totalValue: string
+    yield: string
+    description: string
+    tags: string
+}
+
+interface PendingDraftState {
+    draftId: string
+    draftAccessToken: string
+    metadataURI: string | null
+    generationStage: GenerationStage
+    formData: ListingFormData
+}
+
+const PENDING_DRAFT_STORAGE_KEY = 'brickfi-pending-property-draft'
+const GENERATION_STAGES: GenerationStage[] = ['idle', 'uploading', 'starting', 'waiting_world_labs', 'finalizing', 'ready', 'failed']
+
+function isGenerationStage(value: unknown): value is GenerationStage {
+    return typeof value === 'string' && GENERATION_STAGES.includes(value as GenerationStage)
+}
+
+function emptyListingFormData(): ListingFormData {
+    return {
+        title: "",
+        location: "",
+        totalValue: "",
+        yield: "",
+        description: "",
+        tags: ""
+    }
+}
+
+function parsePendingDraft(value: string | null): PendingDraftState | null {
+    if (!value) return null
+    try {
+        const parsed: unknown = JSON.parse(value)
+        if (typeof parsed !== 'object' || parsed === null) return null
+        const pending = parsed as Record<string, unknown>
+        const formData = pending.formData as Partial<ListingFormData> | undefined
+        if (
+            typeof pending.draftId !== 'string' ||
+            typeof pending.draftAccessToken !== 'string' ||
+            !isGenerationStage(pending.generationStage) ||
+            typeof formData?.title !== 'string' ||
+            typeof formData.location !== 'string' ||
+            typeof formData.totalValue !== 'string' ||
+            typeof formData.yield !== 'string' ||
+            typeof formData.description !== 'string' ||
+            typeof formData.tags !== 'string'
+        ) {
+            return null
+        }
+
+        return {
+            draftId: pending.draftId,
+            draftAccessToken: pending.draftAccessToken,
+            metadataURI: typeof pending.metadataURI === 'string' ? pending.metadataURI : null,
+            generationStage: pending.generationStage,
+            formData: {
+                title: formData.title,
+                location: formData.location,
+                totalValue: formData.totalValue,
+                yield: formData.yield,
+                description: formData.description,
+                tags: formData.tags,
+            },
+        }
+    } catch {
+        return null
+    }
+}
+
+async function readJson<T>(response: Response): Promise<T> {
+    const payload = await response.json()
+    if (!response.ok) {
+        const message = typeof payload?.error === 'string' ? payload.error : 'Request failed'
+        throw new Error(message)
+    }
+    return payload as T
+}
+
+function randomTokenSymbol() {
+    const possibleChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    const length = Math.floor(Math.random() * 2) + 3
+    let randomSymbol = ""
+    for (let i = 0; i < length; i++) {
+        randomSymbol += possibleChars.charAt(Math.floor(Math.random() * possibleChars.length))
+    }
+    return randomSymbol
 }
 
 export default function CreatePropertyPage() {
-    const { refetchProperties, addProperty } = useProperties()
+    const { refetchProperties } = useProperties()
     const { address } = useAccount()
+    const { signMessageAsync } = useSignMessage()
     const router = useRouter()
     const [loading, setLoading] = useState(false)
     const [txSubmitted, setTxSubmitted] = useState(false)
+    const [draftId, setDraftId] = useState<string | null>(null)
+    const [draftAccessToken, setDraftAccessToken] = useState<string | null>(null)
+    const [metadataURI, setMetadataURI] = useState<string | null>(null)
+    const [generationStage, setGenerationStage] = useState<GenerationStage>('idle')
 
     const {
         createProperty,
@@ -37,26 +154,72 @@ export default function CreatePropertyPage() {
         createPropertyError
     } = usePropertyFactory()
 
-    // Form State
-    const [formData, setFormData] = useState({
-        title: "",
-        location: "",
-        totalValue: "",
-        yield: "",
-        description: "",
-        tags: ""
-    })
+    const [formData, setFormData] = useState<ListingFormData>(emptyListingFormData)
     const [images, setImages] = useState<File[]>([])
-    const [uploadingImages, setUploadingImages] = useState(false)
-    const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
 
-    // Handle transaction success
+    const tagsArray = useMemo(
+        () => formData.tags
+            ? formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
+            : ["New Listing"],
+        [formData.tags]
+    )
+
+    const formReady = Boolean(
+        address &&
+        formData.title &&
+        formData.location &&
+        formData.description &&
+        formData.totalValue &&
+        formData.yield &&
+        images.length === ROOM_IMAGE_COUNT
+    )
+
+    const inputsLocked = generationStage !== 'idle' && generationStage !== 'failed'
+    const generationInProgress = generationStage === 'uploading' || generationStage === 'starting' || generationStage === 'waiting_world_labs' || generationStage === 'finalizing'
+    const imagePreviews = useMemo(
+        () => images.map((image) => ({ image, url: URL.createObjectURL(image) })),
+        [images]
+    )
+
+    useEffect(() => {
+        return () => {
+            imagePreviews.forEach((preview) => URL.revokeObjectURL(preview.url))
+        }
+    }, [imagePreviews])
+
+    useEffect(() => {
+        const pending = parsePendingDraft(window.sessionStorage.getItem(PENDING_DRAFT_STORAGE_KEY))
+        if (!pending) return
+
+        setDraftId(pending.draftId)
+        setDraftAccessToken(pending.draftAccessToken)
+        setMetadataURI(pending.metadataURI)
+        setFormData(pending.formData)
+        if (pending.generationStage === 'finalizing') {
+            setGenerationStage('waiting_world_labs')
+        } else if (pending.generationStage === 'uploading' || pending.generationStage === 'starting') {
+            setGenerationStage('failed')
+        } else {
+            setGenerationStage(pending.generationStage)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (!draftId || !draftAccessToken) return
+
+        window.sessionStorage.setItem(PENDING_DRAFT_STORAGE_KEY, JSON.stringify({
+            draftId,
+            draftAccessToken,
+            metadataURI,
+            generationStage,
+            formData,
+        }))
+    }, [draftAccessToken, draftId, formData, generationStage, metadataURI])
+
     useEffect(() => {
         if (isCreateSuccess && txSubmitted) {
             toast.success("Property created successfully on blockchain!")
             setTxSubmitted(false)
-
-            // Reset form
             setFormData({
                 title: "",
                 location: "",
@@ -66,34 +229,81 @@ export default function CreatePropertyPage() {
                 tags: ""
             })
             setImages([])
-            setUploadProgress(null)
-
-            // Refetch properties and redirect
+            setDraftId(null)
+            setDraftAccessToken(null)
+            setMetadataURI(null)
+            setGenerationStage('idle')
+            window.sessionStorage.removeItem(PENDING_DRAFT_STORAGE_KEY)
             refetchProperties()
-            setTimeout(() => {
-                router.push("/")
-            }, 1000)
+            setTimeout(() => router.push("/"), 1000)
         }
     }, [isCreateSuccess, txSubmitted, refetchProperties, router])
 
-    // Handle transaction error
     useEffect(() => {
         if (isCreatePropertyError && createPropertyError) {
-            toast.error("Transaction failed", {
-                description: createPropertyError.message
-            })
+            toast.error("Transaction failed", { description: createPropertyError.message })
             setLoading(false)
-            setUploadingImages(false)
         }
     }, [isCreatePropertyError, createPropertyError])
+
+    const finalizeMetadata = useCallback(async (currentDraftId: string, currentDraftAccessToken: string) => {
+        setGenerationStage('finalizing')
+        try {
+            const finalized = await readJson<FinalizeResponse>(await fetch(`/api/property-generation/drafts/${currentDraftId}/finalize-metadata`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${currentDraftAccessToken}` },
+            }))
+            if (!finalized.metadataURI) {
+                throw new Error(finalized.error || 'Metadata finalization failed')
+            }
+            setMetadataURI(finalized.metadataURI)
+            setGenerationStage('ready')
+            toast.success("3D room model is ready. You can now mint the listing.")
+        } catch (error) {
+            setGenerationStage('waiting_world_labs')
+            throw error
+        }
+    }, [])
+
+    const pollGenerationStatus = useCallback(async () => {
+        if (!draftId || !draftAccessToken || generationStage === 'ready' || generationStage === 'finalizing') return
+
+        const status = await readJson<StatusResponse>(await fetch(`/api/property-generation/drafts/${draftId}/status`, {
+            headers: { Authorization: `Bearer ${draftAccessToken}` },
+        }))
+        if (!status.job) return
+
+        if (status.job.status === 'succeeded') {
+            await finalizeMetadata(draftId, draftAccessToken)
+            return
+        }
+
+        if (status.job.status === 'failed') {
+            setGenerationStage('failed')
+            toast.error("3D room generation failed", {
+                description: status.job.error || "Please try again with clearer room photos."
+            })
+        }
+    }, [draftAccessToken, draftId, finalizeMetadata, generationStage])
+
+    useEffect(() => {
+        if (!draftId || !draftAccessToken || generationStage !== 'waiting_world_labs') return
+        const interval = window.setInterval(() => {
+            pollGenerationStatus().catch(error => {
+                toast.error("Failed to check 3D generation status", {
+                    description: error instanceof Error ? error.message : "Unknown error"
+                })
+            })
+        }, 10000)
+
+        return () => window.clearInterval(interval)
+    }, [draftAccessToken, draftId, generationStage, pollGenerationStatus])
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files
         if (!files) return
 
         const fileArray = Array.from(files)
-
-        // Validate file types
         const validFiles = fileArray.filter(file => file.type.startsWith('image/'))
 
         if (validFiles.length !== fileArray.length) {
@@ -101,415 +311,249 @@ export default function CreatePropertyPage() {
             return
         }
 
-        // Append new images to existing ones, max 3 total
-        const remainingSlots = 3 - images.length
+        const remainingSlots = ROOM_IMAGE_COUNT - images.length
         const filesToAdd = validFiles.slice(0, remainingSlots)
-
         if (validFiles.length > remainingSlots) {
-            toast.error(`Maximum 3 images allowed. Only first ${remainingSlots} images will be added.`)
+            toast.error(`Exactly ${ROOM_IMAGE_COUNT} images are required. Only first ${remainingSlots} images were added.`)
         }
 
         setImages([...images, ...filesToAdd])
+        e.target.value = ''
     }
 
     const removeImage = (index: number) => {
         setImages(images.filter((_, i) => i !== index))
     }
 
-    const handleSubmit = async (e: FormEvent) => {
-        e.preventDefault()
-
+    const createDraftAndGenerate = async () => {
         if (!address) {
             toast.error("Please connect your wallet")
             return
         }
 
         const totalValueNum = parseFloat(formData.totalValue)
-        const yieldNum = parseFloat(formData.yield)
-
-        // Basic Validation
-        if (!formData.title || !formData.location || !formData.description || isNaN(totalValueNum) || isNaN(yieldNum)) {
+        const expectedMonthlyIncomeNum = parseFloat(formData.yield)
+        if (!formData.title || !formData.location || !formData.description || isNaN(totalValueNum) || isNaN(expectedMonthlyIncomeNum)) {
             toast.error("Please fill in all required fields correctly.")
             return
         }
 
-        // Check if images are provided (required)
-        if (images.length === 0) {
-            toast.error("Please upload at least one property image.")
+        if (images.length !== ROOM_IMAGE_COUNT) {
+            toast.error(`Please upload exactly ${ROOM_IMAGE_COUNT} room photos.`)
             return
         }
 
+        setLoading(true)
         try {
-            setUploadingImages(true)
-            setLoading(true)
-
-            // Upload images to IPFS
-            toast.info("Uploading images to IPFS...")
-            const imageURIs: string[] = []
-
-            for (let i = 0; i < images.length; i++) {
-                const image = images[i]
-                setUploadProgress({
-                    current: i + 1,
-                    total: images.length,
-                    currentFileName: image.name
-                })
-
-                const formData = new FormData()
-                formData.append('file', image)
-
-                const response = await fetch('/api/ipfs/upload-image', {
-                    method: 'POST',
-                    body: formData,
-                })
-
-                if (!response.ok) {
-                    throw new Error(`Failed to upload image: ${image.name}`)
-                }
-
-                const data = await response.json()
-                imageURIs.push(data.ipfsURL) // ipfs://...
-            }
-
-            toast.success("Images uploaded to IPFS!", {
-                description: `${imageURIs.length} image(s) successfully uploaded`
-            })
-
-            // Generate random 3-4 uppercase letter token symbol
-            const possibleChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-            let randomSymbol = ""
-            const length = Math.floor(Math.random() * 2) + 3 // 3 or 4
-            for (let i = 0; i < length; i++) {
-                randomSymbol += possibleChars.charAt(Math.floor(Math.random() * possibleChars.length))
-            }
-
-            // Parse tags
-            const tagsArray = formData.tags
-                ? formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
-                : ["New Listing"]
-
-            // Calculate annual yield from monthly income
-            const annualYield = totalValueNum > 0 ? ((yieldNum * 12) / totalValueNum * 100).toFixed(2) : "0"
-
-            // Generate AI insights before uploading metadata
-            toast.info("Generating AI investment insights...")
-            let aiInsights = null
-            try {
-                const insightsResponse = await fetch('/api/ai/generate-insights', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        name: formData.title,
-                        location: formData.location,
-                        totalValue: totalValueNum,
-                        expectedMonthlyIncome: yieldNum,
-                    }),
-                })
-
-                if (insightsResponse.ok) {
-                    const insightsData = await insightsResponse.json()
-                    aiInsights = insightsData.insights
-                    console.log('AI Insights generated:', aiInsights)
-                } else {
-                    console.error('Failed to generate AI insights:', await insightsResponse.text())
-                    toast.warning("AI insights generation failed, continuing without them")
-                }
-            } catch (error) {
-                console.error('Error generating AI insights:', error)
-                toast.warning("AI insights unavailable, continuing without them")
-            }
-
-            // Create metadata object with AI insights
-            const metadata = {
-                name: formData.title,
+            setGenerationStage('uploading')
+            const signatureIssuedAt = new Date().toISOString()
+            const signatureMessage = buildDraftSignatureMessage({
+                walletAddress: address,
+                title: formData.title,
+                location: formData.location,
                 description: formData.description,
-                images: imageURIs,
-                location: formData.location,
                 totalValue: totalValueNum,
-                expectedMonthlyIncome: yieldNum,
-                annualYield: annualYield,
+                expectedMonthlyIncome: expectedMonthlyIncomeNum,
                 tags: tagsArray,
-                aiInsights: aiInsights
-            }
-
-            toast.info("Uploading metadata to IPFS...")
-            const metadataResponse = await fetch('/api/ipfs/upload-metadata', {
+                signatureIssuedAt,
+            })
+            const walletSignature = await signMessageAsync({ message: signatureMessage })
+            const draft = await readJson<DraftResponse>(await fetch('/api/property-generation/drafts', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(metadata), // metadata를 직접 전달 (감싸지 않음)
-            })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    walletAddress: address,
+                    signatureMessage,
+                    signatureIssuedAt,
+                    walletSignature,
+                    title: formData.title,
+                    location: formData.location,
+                    description: formData.description,
+                    totalValue: totalValueNum,
+                    expectedMonthlyIncome: expectedMonthlyIncomeNum,
+                    tags: tagsArray,
+                }),
+            }))
+            setDraftId(draft.draftId)
+            setDraftAccessToken(draft.draftAccessToken)
 
-            if (!metadataResponse.ok) {
-                throw new Error("Failed to upload metadata to IPFS")
-            }
+            const roomImages = new FormData()
+            images.forEach(image => roomImages.append('files', image))
+            await readJson(await fetch(`/api/property-generation/drafts/${draft.draftId}/images`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${draft.draftAccessToken}` },
+                body: roomImages,
+            }))
 
-            const { ipfsHash: metadataHash } = await metadataResponse.json()
-            const metadataURI = `ipfs://${metadataHash}`
+            setGenerationStage('starting')
+            await readJson(await fetch(`/api/property-generation/drafts/${draft.draftId}/start`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${draft.draftAccessToken}` },
+            }))
 
-            toast.info("Creating property on blockchain...")
-
-            // Prepare PropertyInfo struct for the smart contract
-            const propertyInfo = {
-                name: formData.title,
-                location: formData.location,
-                totalValue: BigInt(Math.round(totalValueNum * 1e6)), // Convert to USDC decimals (6)
-                expectedMonthlyIncome: BigInt(Math.round(yieldNum * 1e6)), // Convert to USDC decimals (6)
-                metadataURI: metadataURI,
-                isActive: true
-            }
-
-            // Create property on blockchain using wagmi writeContract
-            createProperty({
-                address: CONTRACTS.PROPERTY_FACTORY,
-                abi: PropertyFactoryABI,
-                functionName: 'createProperty',
-                args: [formData.title, randomSymbol, propertyInfo]
-            })
-
-            // Set flag that transaction was submitted
-            setTxSubmitted(true)
-            toast.success("Property transaction submitted! Please confirm in your wallet...")
+            setGenerationStage('waiting_world_labs')
+            toast.info("3D room generation started. This usually takes about 5 minutes.")
         } catch (error) {
-            console.error("Error creating property:", error)
-            toast.error("Failed to create property", {
-                description: error instanceof Error ? error.message : "An unknown error occurred"
+            setGenerationStage('failed')
+            toast.error("Failed to start 3D generation", {
+                description: error instanceof Error ? error.message : "Unknown error"
             })
         } finally {
-            setUploadingImages(false)
             setLoading(false)
         }
     }
 
+    const mintProperty = () => {
+        if (!metadataURI) {
+            toast.error("Generate the 3D room model before minting the listing.")
+            return
+        }
+
+        const totalValueNum = parseFloat(formData.totalValue)
+        const expectedMonthlyIncomeNum = parseFloat(formData.yield)
+        if (isNaN(totalValueNum) || isNaN(expectedMonthlyIncomeNum)) {
+            toast.error("Invalid property financial values")
+            return
+        }
+
+        createProperty({
+            address: CONTRACTS.PROPERTY_FACTORY,
+            abi: PropertyFactoryABI,
+            functionName: 'createProperty',
+            args: [formData.title, randomTokenSymbol(), {
+                name: formData.title,
+                location: formData.location,
+                totalValue: BigInt(Math.round(totalValueNum * 1e6)),
+                expectedMonthlyIncome: BigInt(Math.round(expectedMonthlyIncomeNum * 1e6)),
+                metadataURI,
+                isActive: true
+            }]
+        })
+        setTxSubmitted(true)
+        toast.success("Property transaction submitted. Please confirm in your wallet.")
+    }
+
+    const handleSubmit = async (e: FormEvent) => {
+        e.preventDefault()
+        if (metadataURI) {
+            mintProperty()
+            return
+        }
+        await createDraftAndGenerate()
+    }
+
+    const statusCopy = {
+        idle: `Upload exactly ${ROOM_IMAGE_COUNT} room photos to generate a required 3D room model before minting.`,
+        uploading: "Uploading room photos to secure server storage...",
+        starting: "Starting World Labs room generation...",
+        waiting_world_labs: "Generating 3D room model with World Labs. This usually takes about 5 minutes.",
+        finalizing: "Finalizing IPFS metadata with generated 3D room assets...",
+        ready: "3D room model is ready. Mint the property listing on-chain.",
+        failed: "3D room generation failed. Review the photos and try again."
+    }
+
     return (
-        <div className="container max-w-2xl py-12 px-4 mx-auto">
+        <div className="container max-w-3xl py-12 px-4 mx-auto">
             <Button variant="ghost" onClick={() => router.back()} className="mb-6 pl-0 hover:bg-transparent hover:text-brand-green">
-                <ArrowLeft className="nr-2 h-4 w-4" /> Back to Marketplace
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Marketplace
             </Button>
 
             <div className="mb-8 text-center">
                 <h1 className="text-3xl font-bold mb-2">List Your Property</h1>
-                <p className="text-muted-foreground">Register a new asset for tokenization on BrickFi.</p>
+                <p className="text-muted-foreground">Register a new asset with a required server-generated 3D room model.</p>
             </div>
 
             <Card>
                 <CardHeader>
                     <CardTitle>Property Details</CardTitle>
-                    <CardDescription>Enter the core info for potential investors.</CardDescription>
+                    <CardDescription>Enter the listing details, then upload exactly {ROOM_IMAGE_COUNT} room photos for modeling.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-6">
-
                         <div className="space-y-2">
                             <Label htmlFor="title">Property Title</Label>
-                            <Input
-                                id="title"
-                                placeholder="e.g. Luxury Penthouse in DIFC"
-                                value={formData.title}
-                                onChange={e => setFormData({ ...formData, title: e.target.value })}
-                                required
-                            />
+                            <Input id="title" placeholder="e.g. Luxury Penthouse in DIFC" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} required disabled={inputsLocked} />
                         </div>
 
                         <div className="space-y-2">
                             <Label htmlFor="location">Location</Label>
-                            <Input
-                                id="location"
-                                placeholder="e.g. Downtown Dubai, UAE"
-                                value={formData.location}
-                                onChange={e => setFormData({ ...formData, location: e.target.value })}
-                                required
-                            />
+                            <Input id="location" placeholder="e.g. Downtown Dubai, UAE" value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} required disabled={inputsLocked} />
                         </div>
 
                         <div className="space-y-2">
                             <Label htmlFor="description">Description *</Label>
-                            <Textarea
-                                id="description"
-                                placeholder="Describe the property, its features, location benefits, and investment potential..."
-                                value={formData.description}
-                                onChange={e => setFormData({ ...formData, description: e.target.value })}
-                                required
-                                rows={4}
-                                className="resize-none"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                This description will be visible to investors on the property details page.
-                            </p>
+                            <Textarea id="description" placeholder="Describe the property, its room condition, location benefits, and investment potential..." value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} required rows={4} className="resize-none" disabled={inputsLocked} />
                         </div>
 
                         <div className="space-y-2">
                             <Label htmlFor="tags">Tags (Optional)</Label>
-                            <Input
-                                id="tags"
-                                placeholder="e.g. Luxury, High Yield, Beachfront"
-                                value={formData.tags}
-                                onChange={e => setFormData({ ...formData, tags: e.target.value })}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                Comma-separated tags to help investors find your property (e.g., "Luxury, Waterfront, High Yield")
-                            </p>
+                            <Input id="tags" placeholder="e.g. Luxury, High Yield, Waterfront" value={formData.tags} onChange={e => setFormData({ ...formData, tags: e.target.value })} disabled={inputsLocked} />
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="totalValue">Total Asset Value ($)</Label>
-                                <Input
-                                    id="totalValue"
-                                    type="number"
-                                    step="0.01"
-                                    placeholder="1250000"
-                                    value={formData.totalValue}
-                                    onChange={e => setFormData({ ...formData, totalValue: e.target.value })}
-                                    required
-                                />
+                                <Input id="totalValue" type="number" step="0.01" placeholder="1250000" value={formData.totalValue} onChange={e => setFormData({ ...formData, totalValue: e.target.value })} required disabled={inputsLocked} />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="yield">Expected Monthly Income ($)</Label>
-                                <Input
-                                    id="yield"
-                                    type="number"
-                                    step="0.01"
-                                    placeholder="6250"
-                                    value={formData.yield}
-                                    onChange={e => setFormData({ ...formData, yield: e.target.value })}
-                                    required
-                                />
+                                <Input id="yield" type="number" step="0.01" placeholder="6250" value={formData.yield} onChange={e => setFormData({ ...formData, yield: e.target.value })} required disabled={inputsLocked} />
                             </div>
                         </div>
 
                         <div className="space-y-3">
-                            <Label htmlFor="images" className="text-base">Property Images *</Label>
+                            <Label htmlFor="images" className="text-base">Room Photos *</Label>
+                            <div className="rounded-lg border border-border bg-secondary/30 p-4 text-sm text-muted-foreground">
+                                Take {ROOM_IMAGE_COUNT} photos from the same room with consistent lighting and overlapping views. World Labs works best when all images share the same aspect ratio and resolution.
+                            </div>
 
-                            {images.length === 0 ? (
-                                <div className="relative">
-                                    <Input
-                                        id="images"
-                                        type="file"
-                                        accept="image/*"
-                                        multiple
-                                        onChange={handleImageChange}
-                                        disabled={uploadingImages}
-                                        className="hidden"
-                                    />
-                                    <label
-                                        htmlFor="images"
-                                        className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer transition-all ${
-                                            uploadingImages
-                                                ? 'border-muted bg-muted/50 cursor-not-allowed'
-                                                : 'border-border hover:border-brand-green hover:bg-brand-green/5'
-                                        }`}
-                                    >
-                                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                            <Upload className={`w-10 h-10 mb-3 ${uploadingImages ? 'text-muted-foreground' : 'text-brand-green'}`} />
-                                            <p className="mb-2 text-sm font-medium">
-                                                <span className="text-brand-green">Click to upload</span> or drag and drop
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                                1-3 images (PNG, JPG, max 10MB each)
-                                            </p>
-                                        </div>
-                                    </label>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    <div className="grid grid-cols-3 gap-3">
-                                        {images.map((image, index) => (
-                                            <div key={index} className="relative group">
-                                                <div className="aspect-square rounded-lg overflow-hidden border-2 border-border hover:border-brand-green transition-colors">
-                                                    <img
-                                                        src={URL.createObjectURL(image)}
-                                                        alt={`Property ${index + 1}`}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeImage(index)}
-                                                    className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1.5 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110"
-                                                    disabled={uploadingImages}
-                                                    title="Remove image"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                                    </svg>
+                            <Input id="images" type="file" accept="image/*" multiple onChange={handleImageChange} disabled={loading || inputsLocked || images.length >= ROOM_IMAGE_COUNT} />
+
+                            {imagePreviews.length > 0 && (
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    {imagePreviews.map((preview, index) => (
+                                        <div key={`${preview.image.name}-${index}`} className="relative group">
+                                            <div className="relative aspect-square rounded-lg overflow-hidden border-2 border-border hover:border-brand-green transition-colors">
+                                                <Image src={preview.url} alt={`Room ${index + 1}`} fill unoptimized className="object-cover" />
+                                            </div>
+                                            {!inputsLocked && (
+                                                <button type="button" onClick={() => removeImage(index)} className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1.5 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity" disabled={loading}>
+                                                    <span className="sr-only">Remove image</span>
+                                                    ×
                                                 </button>
-                                                <p className="text-xs text-muted-foreground mt-1 truncate px-1" title={image.name}>
-                                                    {image.name}
-                                                </p>
-                                            </div>
-                                        ))}
-
-                                        {images.length < 3 && (
-                                            <div className="aspect-square">
-                                                <Input
-                                                    id={`images-add-${images.length}`}
-                                                    type="file"
-                                                    accept="image/*"
-                                                    multiple
-                                                    onChange={handleImageChange}
-                                                    disabled={uploadingImages}
-                                                    className="hidden"
-                                                />
-                                                <label
-                                                    htmlFor={`images-add-${images.length}`}
-                                                    className="flex flex-col items-center justify-center w-full h-full border-2 border-dashed border-border hover:border-brand-green hover:bg-brand-green/5 rounded-lg cursor-pointer transition-all"
-                                                >
-                                                    <Upload className="w-8 h-8 text-brand-green mb-2" />
-                                                    <p className="text-xs text-muted-foreground">Add more</p>
-                                                </label>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <circle cx="12" cy="12" r="10"></circle>
-                                            <line x1="12" y1="16" x2="12" y2="12"></line>
-                                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                        </svg>
-                                        {images.length} of 3 images selected. Images will be stored on IPFS permanently.
-                                    </p>
-
-                                    {uploadingImages && uploadProgress && (
-                                        <div className="mt-3 p-3 bg-brand-green/10 border border-brand-green/20 rounded-lg">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <div className="animate-spin h-4 w-4 border-2 border-brand-green border-t-transparent rounded-full"></div>
-                                                <span className="text-sm font-medium text-brand-green">
-                                                    Uploading to IPFS: {uploadProgress.current} of {uploadProgress.total}
-                                                </span>
-                                            </div>
-                                            <p className="text-xs text-muted-foreground truncate">
-                                                Current file: {uploadProgress.currentFileName}
-                                            </p>
+                                            )}
+                                            <p className="text-xs text-muted-foreground mt-1 truncate px-1" title={preview.image.name}>{preview.image.name}</p>
                                         </div>
-                                    )}
+                                    ))}
                                 </div>
                             )}
+
+                            <p className="text-xs text-muted-foreground">{images.length} of {ROOM_IMAGE_COUNT} room photos selected.</p>
+                        </div>
+
+                        <div className="rounded-lg border border-border p-4 space-y-3">
+                            <div className="flex items-center gap-3">
+                                {generationStage === 'ready' ? <CheckCircle2 className="h-5 w-5 text-brand-green" /> : generationStage === 'idle' || generationStage === 'failed' ? <Box className="h-5 w-5 text-muted-foreground" /> : <Loader2 className="h-5 w-5 animate-spin text-brand-green" />}
+                                <div>
+                                    <p className="font-medium">3D Room Generation</p>
+                                    <p className="text-sm text-muted-foreground">{statusCopy[generationStage]}</p>
+                                </div>
+                            </div>
+                            {metadataURI && <p className="text-xs text-muted-foreground break-all">Metadata URI: {metadataURI}</p>}
                         </div>
 
                         <div className="pt-4 flex justify-end">
-                            <Button
-                                type="submit"
-                                size="lg"
-                                disabled={loading || !formData.title || !formData.location || !formData.description || !formData.totalValue || !formData.yield || !address || images.length === 0 || uploadingImages || isCreatingProperty || isWaitingForCreate}
-                                className="bg-brand-green text-black hover:bg-brand-green/90 w-full md:w-auto"
-                            >
+                            <Button type="submit" size="lg" disabled={loading || isCreatingProperty || isWaitingForCreate || (!metadataURI && !formReady) || generationInProgress} className="bg-brand-green text-black hover:bg-brand-green/90 w-full md:w-auto">
                                 {!address ? "Connect Wallet" :
-                                    uploadingImages && uploadProgress ?
-                                        `Uploading ${uploadProgress.current}/${uploadProgress.total} images...` :
-                                    uploadingImages ? "Uploading Images..." :
-                                        isCreatingProperty ? "Confirm in Wallet..." :
-                                        isWaitingForCreate ? "Processing Transaction..." :
-                                        loading ? "Preparing..." :
-                                            "List Property"}
+                                    metadataURI ?
+                                        isCreatingProperty ? "Confirm in Wallet..." : isWaitingForCreate ? "Processing Transaction..." : "Mint Property Listing" :
+                                        generationStage === 'uploading' ? "Uploading Room Photos..." :
+                                        generationStage === 'starting' ? "Starting 3D Generation..." :
+                                        generationStage === 'waiting_world_labs' ? "Generating 3D Room..." :
+                                        generationStage === 'finalizing' ? "Finalizing Metadata..." :
+                                        "Generate 3D Room"}
                             </Button>
                         </div>
-
                     </form>
                 </CardContent>
             </Card>

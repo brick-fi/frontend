@@ -5,6 +5,7 @@ import { PropertyHero } from "@/components/property/property-hero"
 import { PropertyStats } from "@/components/property/property-stats"
 import { InvestmentPanel } from "@/components/property/investment-panel"
 import { AiAnalysis } from "@/components/property/ai-analysis"
+import { WorldModelSection } from "@/components/property/world-model-section"
 import { Separator } from "@/components/ui/separator"
 import { useProperties } from "@/context/property-context"
 
@@ -56,6 +57,8 @@ export default function PropertyPage() {
                         </div>
 
                         <AiAnalysis property={property} />
+
+                        <WorldModelSection property={property} />
                     </div>
 
                     {/* Right Column: Investment Panel */}
