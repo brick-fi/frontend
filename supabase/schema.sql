@@ -59,5 +59,4 @@ create trigger set_property_3d_jobs_updated_at
 before update on public.property_3d_jobs
 for each row execute function public.set_updated_at();
 
--- Create a private Supabase Storage bucket named `property-room-images` in the dashboard.
--- The app accesses these tables and bucket through Next.js API routes using SUPABASE_SERVICE_ROLE_KEY.
+-- The app accesses these tables through Next.js API routes using SUPABASE_SERVICE_ROLE_KEY.
