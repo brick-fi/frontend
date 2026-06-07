@@ -20,14 +20,18 @@ WORLD_LABS_API_KEY=
 
 The account must have API credits. Multi-image room generation is asynchronous and usually takes about 5 minutes.
 
-## Pinata
+## S3 Property Assets
 
 ```bash
-PINATA_API_KEY=
-PINATA_SECRET_KEY=
+AWS_REGION=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+PROPERTY_ASSETS_S3_BUCKET=
+PROPERTY_ASSETS_PUBLIC_BASE_URL=
+PROPERTY_ASSETS_S3_PREFIX=property-generation
 ```
 
-Pinata is used to pin final listing images and metadata after the 3D generation succeeds.
+S3 stores final listing images and metadata after the 3D generation succeeds. `PROPERTY_ASSETS_PUBLIC_BASE_URL` should be a public HTTPS base URL for the bucket or a CloudFront/custom domain.
 
 ## Anthropic
 

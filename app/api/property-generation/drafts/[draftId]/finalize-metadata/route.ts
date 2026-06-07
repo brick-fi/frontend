@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { requireDraftAccess } from '@/lib/property-generation/auth'
 import { ROOM_IMAGE_BUCKET } from '@/lib/property-generation/types'
-import { uploadBlobToPinata, uploadJsonToPinata } from '@/lib/property-generation/pinata'
+import { createPropertyAssetKey, uploadBlobToS3, uploadJsonToS3 } from '@/lib/property-generation/s3'
 
 export const runtime = 'nodejs'
 
@@ -114,7 +114,7 @@ export async function POST(request: Request, context: RouteContext) {
     try {
       const mirroredAssetRefs = stringMapFromJson(job.mirrored_asset_refs)
       const imageURIs: string[] = []
-      for (const imagePath of job.input_image_paths) {
+      for (const [index, imagePath] of job.input_image_paths.entries()) {
         const existingUri = mirroredAssetRefs[imagePath]
         if (existingUri) {
           imageURIs.push(existingUri)
@@ -125,8 +125,12 @@ export async function POST(request: Request, context: RouteContext) {
         if (error || !data) {
           throw new Error(error?.message || `Failed to download ${imagePath}`)
         }
-        const uploaded = await uploadBlobToPinata(data, pathFileName(imagePath))
-        mirroredAssetRefs[imagePath] = uploaded.ipfsURL
+        const uploaded = await uploadBlobToS3({
+          file: data,
+          key: createPropertyAssetKey(draftId, 'images', `${index + 1}-${pathFileName(imagePath)}`),
+          contentType: data.type,
+        })
+        mirroredAssetRefs[imagePath] = uploaded.url
 
         const { error: mirroredAssetRefsError } = await supabase
           .from('property_3d_jobs')
@@ -137,7 +141,7 @@ export async function POST(request: Request, context: RouteContext) {
           throw new Error(mirroredAssetRefsError.message)
         }
 
-        imageURIs.push(uploaded.ipfsURL)
+        imageURIs.push(uploaded.url)
       }
 
       const totalValue = Number(draft.total_value)
@@ -165,7 +169,7 @@ export async function POST(request: Request, context: RouteContext) {
       }
 
       const metadataURI = mirroredAssetRefs[METADATA_URI_REF_KEY] ||
-        (await uploadJsonToPinata(metadata, `BrickFi Property Metadata - ${draft.title}`)).metadataURI
+        (await uploadJsonToS3(metadata, createPropertyAssetKey(draftId, 'metadata.json'))).url
 
       if (!mirroredAssetRefs[METADATA_URI_REF_KEY]) {
         mirroredAssetRefs[METADATA_URI_REF_KEY] = metadataURI

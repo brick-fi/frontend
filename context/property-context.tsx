@@ -30,6 +30,10 @@ interface ContractPropertyDetail {
 
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined)
 
+function toPublicAssetUrl(uri: string) {
+    return uri.startsWith('ipfs://') ? uri.replace('ipfs://', 'https://ipfs.io/ipfs/') : uri
+}
+
 function loadSavedFavorites() {
     if (typeof window === "undefined") return []
     const savedFavs = window.localStorage.getItem("brickfi-favorites")
@@ -77,9 +81,8 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
 
                         if (detail.metadataURI && detail.metadataURI !== "") {
                             try {
-                                // Convert ipfs:// to gateway URL - use Pinata gateway for better performance
-                                const gatewayURL = detail.metadataURI.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
-                                const response = await fetch(gatewayURL, {
+                                const metadataURL = toPublicAssetUrl(detail.metadataURI)
+                                const response = await fetch(metadataURL, {
                                     mode: 'cors',
                                     headers: {
                                         'Accept': 'application/json'
@@ -89,11 +92,9 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
                                 if (response.ok) {
                                     const metadata: PropertyMetadata = await response.json()
 
-                                    // Convert all IPFS image URIs to gateway URLs using Pinata
+                                    // Convert legacy IPFS image URIs to a public gateway URL.
                                     if (metadata.images && metadata.images.length > 0) {
-                                        images = metadata.images.map(uri =>
-                                            uri.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
-                                        )
+                                        images = metadata.images.map(toPublicAssetUrl)
                                         imageUrl = images[0] // First image as primary
                                     }
 

@@ -18,8 +18,8 @@ export interface PropertyWorldModel {
 }
 
 /**
- * IPFS Metadata structure for tokenized properties
- * This metadata is permanently stored on IPFS and referenced by the smart contract
+ * Metadata structure for tokenized properties.
+ * This metadata is stored at the URI referenced by the smart contract.
  */
 export interface PropertyMetadata {
   // Basic Info
@@ -32,7 +32,7 @@ export interface PropertyMetadata {
   expectedMonthlyIncome: number
 
   // Media
-  images: string[] // Array of IPFS URIs (ipfs://...)
+  images: string[]
   worldModel?: PropertyWorldModel | null
 
   // Tags (e.g., "Luxury", "High Yield", "Beachfront")

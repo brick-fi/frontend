@@ -13,11 +13,10 @@ interface PropertyCardProps {
     property: Property
 }
 
-// Helper function to convert IPFS URL to gateway URL
-const convertToGatewayURL = (url: string): string => {
+const toPublicAssetUrl = (url: string): string => {
     if (url.startsWith('ipfs://')) {
         const hash = url.replace('ipfs://', '')
-        return `https://gateway.pinata.cloud/ipfs/${hash}`
+        return `https://ipfs.io/ipfs/${hash}`
     }
     return url
 }
@@ -28,9 +27,8 @@ export function PropertyCard({ property }: PropertyCardProps) {
     const [currentImageIndex, setCurrentImageIndex] = useState(0)
 
     // Use images array if available, otherwise fallback to single imageUrl wrapped in array
-    // Convert IPFS URLs to gateway URLs
     const rawImages = property.images && property.images.length > 0 ? property.images : [property.imageUrl]
-    const images = rawImages.map(url => convertToGatewayURL(url))
+    const images = rawImages.map(url => toPublicAssetUrl(url))
 
     const nextImage = (e: React.MouseEvent) => {
         e.preventDefault()

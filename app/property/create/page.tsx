@@ -447,7 +447,7 @@ export default function CreatePropertyPage() {
         uploading: "Uploading room photos to secure server storage...",
         starting: "Starting World Labs room generation...",
         waiting_world_labs: "Generating 3D room model with World Labs. This usually takes about 5 minutes.",
-        finalizing: "Finalizing IPFS metadata with generated 3D room assets...",
+        finalizing: "Finalizing hosted metadata with generated 3D room assets...",
         ready: "3D room model is ready. Mint the property listing on-chain.",
         failed: "3D room generation failed. Review the photos and try again."
     }
