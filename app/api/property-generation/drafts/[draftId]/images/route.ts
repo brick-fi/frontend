@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { requireDraftAccess } from '@/lib/property-generation/auth'
-import { ROOM_IMAGE_BUCKET, ROOM_IMAGE_COUNT } from '@/lib/property-generation/types'
+import { createPropertyAssetKey, uploadBufferToS3 } from '@/lib/property-generation/s3'
+import { ROOM_IMAGE_COUNT } from '@/lib/property-generation/types'
 
 export const runtime = 'nodejs'
 
 const MAX_ROOM_IMAGE_BYTES = 20 * 1024 * 1024
+const MAX_ROOM_IMAGE_UPLOAD_BODY_BYTES = ROOM_IMAGE_COUNT * MAX_ROOM_IMAGE_BYTES + 2 * 1024 * 1024
 const REPLACEABLE_JOB_STATUS_VALUES = ['queued', 'failed', 'cancelled']
 const REPLACEABLE_JOB_STATUSES = new Set(REPLACEABLE_JOB_STATUS_VALUES)
 
@@ -67,6 +69,14 @@ function detectRoomImageContentType(bytes: Buffer) {
   return null
 }
 
+function isUploadBodySizeAllowed(request: NextRequest) {
+  const contentLength = request.headers.get('content-length')
+  if (!contentLength) return false
+
+  const bodyBytes = Number(contentLength)
+  return Number.isInteger(bodyBytes) && bodyBytes > 0 && bodyBytes <= MAX_ROOM_IMAGE_UPLOAD_BODY_BYTES
+}
+
 interface ValidatedRoomImage {
   bytes: Buffer
   contentType: string
@@ -104,6 +114,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Room images cannot be replaced after 3D generation has started' }, { status: 409 })
     }
 
+    if (!isUploadBodySizeAllowed(request)) {
+      return NextResponse.json({ error: 'Room image upload body is too large' }, { status: 413 })
+    }
+
     const formData = await request.formData()
     const files = formData.getAll('files').filter((file): file is File => file instanceof File)
 
@@ -129,26 +143,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
       validatedImages.push({ bytes, contentType, fileName: file.name })
     }
 
-    const uploadedPaths: string[] = []
-    for (const image of validatedImages) {
-      const path = `${draftId}/${randomUUID()}-${safeFileName(image.fileName)}`
-      const { error } = await supabase.storage
-        .from(ROOM_IMAGE_BUCKET)
-        .upload(path, image.bytes, {
-          contentType: image.contentType,
-          upsert: false,
-        })
-
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
-      uploadedPaths.push(path)
+    const uploadedKeys: string[] = []
+    for (const [index, image] of validatedImages.entries()) {
+      const key = createPropertyAssetKey(draftId, 'images', `${index + 1}-${randomUUID()}-${safeFileName(image.fileName)}`)
+      const uploaded = await uploadBufferToS3({
+        bytes: image.bytes,
+        key,
+        contentType: image.contentType,
+      })
+      uploadedKeys.push(uploaded.key)
     }
 
     const jobPayload = {
       wallet_address: draft.wallet_address,
       status: 'queued',
-      input_image_paths: uploadedPaths,
+      input_image_paths: uploadedKeys,
       mirrored_asset_refs: {},
       error: null,
     }

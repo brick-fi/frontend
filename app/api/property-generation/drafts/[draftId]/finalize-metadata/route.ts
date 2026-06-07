@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { requireDraftAccess } from '@/lib/property-generation/auth'
-import { ROOM_IMAGE_BUCKET } from '@/lib/property-generation/types'
-import { createPropertyAssetKey, uploadBlobToS3, uploadJsonToS3 } from '@/lib/property-generation/s3'
+import { createPropertyAssetKey, publicUrlForS3Key, uploadJsonToS3 } from '@/lib/property-generation/s3'
 
 export const runtime = 'nodejs'
 
@@ -43,10 +42,6 @@ interface GenerationJobRow {
   collider_mesh_url: string | null
   input_image_paths: string[]
   mirrored_asset_refs: Record<string, unknown> | null
-}
-
-function pathFileName(path: string) {
-  return path.split('/').at(-1) || 'room-image.jpg'
 }
 
 function draftAccessErrorResponse(error: unknown) {
@@ -114,23 +109,15 @@ export async function POST(request: Request, context: RouteContext) {
     try {
       const mirroredAssetRefs = stringMapFromJson(job.mirrored_asset_refs)
       const imageURIs: string[] = []
-      for (const [index, imagePath] of job.input_image_paths.entries()) {
+      for (const imagePath of job.input_image_paths) {
         const existingUri = mirroredAssetRefs[imagePath]
         if (existingUri) {
           imageURIs.push(existingUri)
           continue
         }
 
-        const { data, error } = await supabase.storage.from(ROOM_IMAGE_BUCKET).download(imagePath)
-        if (error || !data) {
-          throw new Error(error?.message || `Failed to download ${imagePath}`)
-        }
-        const uploaded = await uploadBlobToS3({
-          file: data,
-          key: createPropertyAssetKey(draftId, 'images', `${index + 1}-${pathFileName(imagePath)}`),
-          contentType: data.type,
-        })
-        mirroredAssetRefs[imagePath] = uploaded.url
+        const imageUrl = publicUrlForS3Key(imagePath)
+        mirroredAssetRefs[imagePath] = imageUrl
 
         const { error: mirroredAssetRefsError } = await supabase
           .from('property_3d_jobs')
@@ -141,7 +128,7 @@ export async function POST(request: Request, context: RouteContext) {
           throw new Error(mirroredAssetRefsError.message)
         }
 
-        imageURIs.push(uploaded.url)
+        imageURIs.push(imageUrl)
       }
 
       const totalValue = Number(draft.total_value)

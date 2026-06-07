@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { requireDraftAccess } from '@/lib/property-generation/auth'
-import { ROOM_IMAGE_BUCKET, ROOM_IMAGE_COUNT } from '@/lib/property-generation/types'
+import { publicUrlForS3Key } from '@/lib/property-generation/s3'
+import { ROOM_IMAGE_COUNT } from '@/lib/property-generation/types'
 import { startWorldGeneration } from '@/lib/property-generation/world-labs'
 
 export const runtime = 'nodejs'
@@ -138,19 +139,16 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: '3D generation is already starting or started' }, { status: 409 })
     }
 
-    const { data: signedUrls, error: signedUrlError } = await supabase.storage
-      .from(ROOM_IMAGE_BUCKET)
-      .createSignedUrls(job.input_image_paths, 10 * 60)
-
-    if (signedUrlError || !signedUrls) {
-      await supabase.from('property_3d_jobs').update({ status: 'queued', error: signedUrlError?.message || 'Failed to sign room image URLs' }).eq('id', job.id)
-      return NextResponse.json({ error: signedUrlError?.message || 'Failed to sign room image URLs' }, { status: 500 })
-    }
-
-    const imageUrls = signedUrls.map((item) => item.signedUrl).filter((url): url is string => Boolean(url))
-    if (imageUrls.length !== ROOM_IMAGE_COUNT) {
-      await supabase.from('property_3d_jobs').update({ status: 'queued', error: 'Failed to sign all room image URLs' }).eq('id', job.id)
-      return NextResponse.json({ error: 'Failed to sign all room image URLs' }, { status: 500 })
+    let imageUrls: string[]
+    try {
+      imageUrls = job.input_image_paths.map(publicUrlForS3Key)
+      if (imageUrls.length !== ROOM_IMAGE_COUNT) {
+        throw new Error('Failed to build all room image URLs')
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to build all room image URLs'
+      await supabase.from('property_3d_jobs').update({ status: 'queued', error: message }).eq('id', job.id)
+      return NextResponse.json({ error: message }, { status: 500 })
     }
 
     let operationId: string
