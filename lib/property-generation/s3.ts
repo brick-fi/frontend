@@ -37,9 +37,26 @@ export function createPropertyAssetKey(draftId: string, ...segments: string[]) {
   return [getKeyPrefix(), safeKeySegment(draftId), ...segments.map(safeKeySegment)].join('/')
 }
 
-function publicUrlForKey(key: string) {
+export function publicUrlForS3Key(key: string) {
   const encodedKey = key.split('/').map(encodeURIComponent).join('/')
   return `${getPublicBaseUrl()}/${encodedKey}`
+}
+
+interface UploadBufferInput {
+  bytes: Buffer
+  key: string
+  contentType?: string
+}
+
+export async function uploadBufferToS3({ bytes, key, contentType }: UploadBufferInput) {
+  await createS3Client().send(new PutObjectCommand({
+    Bucket: getBucket(),
+    Key: key,
+    Body: bytes,
+    ContentType: contentType || 'application/octet-stream',
+  }))
+
+  return { key, url: publicUrlForS3Key(key) }
 }
 
 interface UploadBlobInput {
@@ -56,7 +73,7 @@ export async function uploadBlobToS3({ file, key, contentType }: UploadBlobInput
     ContentType: contentType || file.type || 'application/octet-stream',
   }))
 
-  return { key, url: publicUrlForKey(key) }
+  return { key, url: publicUrlForS3Key(key) }
 }
 
 export async function uploadJsonToS3(json: unknown, key: string) {
@@ -67,5 +84,5 @@ export async function uploadJsonToS3(json: unknown, key: string) {
     ContentType: 'application/json',
   }))
 
-  return { key, url: publicUrlForKey(key) }
+  return { key, url: publicUrlForS3Key(key) }
 }
