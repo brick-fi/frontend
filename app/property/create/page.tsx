@@ -9,6 +9,7 @@ import { useProperties } from "@/context/property-context"
 import { usePropertyFactory } from "@/hooks/usePropertyFactory"
 import { PropertyFactoryABI } from "@/lib/abis/PropertyFactory"
 import { CONTRACTS } from "@/lib/contracts"
+import { uploadRoomImagesDirectly } from "@/lib/property-generation/direct-room-image-upload"
 import { buildDraftSignatureMessage } from "@/lib/property-generation/signature"
 import { ROOM_IMAGE_COUNT } from "@/lib/property-generation/types"
 import Image from "next/image"
@@ -377,13 +378,11 @@ export default function CreatePropertyPage() {
             setDraftId(draft.draftId)
             setDraftAccessToken(draft.draftAccessToken)
 
-            const roomImages = new FormData()
-            images.forEach(image => roomImages.append('files', image))
-            await readJson(await fetch(`/api/property-generation/drafts/${draft.draftId}/images`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${draft.draftAccessToken}` },
-                body: roomImages,
-            }))
+            await uploadRoomImagesDirectly({
+                draftId: draft.draftId,
+                draftAccessToken: draft.draftAccessToken,
+                images,
+            })
 
             setGenerationStage('starting')
             await readJson(await fetch(`/api/property-generation/drafts/${draft.draftId}/start`, {

@@ -30,7 +30,23 @@ PROPERTY_ASSETS_PUBLIC_BASE_URL=
 PROPERTY_ASSETS_S3_PREFIX=property-generation
 ```
 
-S3 stores draft room images immediately when they are uploaded, then reuses those public URLs as final listing images and stores the generated metadata after the 3D generation succeeds. `PROPERTY_ASSETS_PUBLIC_BASE_URL` should be a public HTTPS base URL for the bucket or a CloudFront/custom domain. Configure the deployment/proxy request body limit above 162MB so the eight 20MB image upload limit plus multipart overhead is accepted, while larger requests are rejected before parsing.
+S3 stores draft room images immediately when they are uploaded, then reuses those public URLs as final listing images and stores the generated metadata after the 3D generation succeeds. `PROPERTY_ASSETS_PUBLIC_BASE_URL` should be a public HTTPS base URL for the bucket or a CloudFront/custom domain.
+
+The bucket also needs CORS because room photos upload directly from the browser to presigned S3 URLs:
+
+```json
+[
+  {
+    "AllowedOrigins": ["http://localhost:3000", "https://YOUR_PRODUCTION_DOMAIN"],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
+
+Use an IAM principal with permission to `s3:PutObject` and `s3:GetObject` for the configured bucket/prefix. If `PROPERTY_ASSETS_PUBLIC_BASE_URL` points at CloudFront, configure it to serve the same bucket/prefix publicly over HTTPS.
 
 ## Anthropic
 

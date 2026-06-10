@@ -1,4 +1,5 @@
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 function requireEnv(name: string) {
   const value = process.env[name]
@@ -57,6 +58,48 @@ export async function uploadBufferToS3({ bytes, key, contentType }: UploadBuffer
   }))
 
   return { key, url: publicUrlForS3Key(key) }
+}
+
+interface PresignedPutInput {
+  key: string
+  contentType: string
+  expiresInSeconds: number
+}
+
+export async function createPresignedPutUrl({ key, contentType, expiresInSeconds }: PresignedPutInput) {
+  const command = new PutObjectCommand({
+    Bucket: getBucket(),
+    Key: key,
+    ContentType: contentType,
+  })
+
+  return getSignedUrl(createS3Client(), command, { expiresIn: expiresInSeconds })
+}
+
+export async function getS3ObjectMetadata(key: string) {
+  const response = await createS3Client().send(new HeadObjectCommand({
+    Bucket: getBucket(),
+    Key: key,
+  }))
+
+  return {
+    contentLength: typeof response.ContentLength === 'number' ? response.ContentLength : null,
+    contentType: response.ContentType || null,
+  }
+}
+
+export async function readS3ObjectRange(key: string, range: string) {
+  const response = await createS3Client().send(new GetObjectCommand({
+    Bucket: getBucket(),
+    Key: key,
+    Range: range,
+  }))
+
+  if (!response.Body) {
+    throw new Error('S3 object body is empty')
+  }
+
+  return Buffer.from(await response.Body.transformToByteArray())
 }
 
 interface UploadBlobInput {

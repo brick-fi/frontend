@@ -1,14 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { randomUUID } from 'crypto'
+import { NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 import { requireDraftAccess } from '@/lib/property-generation/auth'
-import { createPropertyAssetKey, uploadBufferToS3 } from '@/lib/property-generation/s3'
-import { ROOM_IMAGE_COUNT } from '@/lib/property-generation/types'
+import {
+  parseRoomImagesRequest,
+  prepareRoomImageUploads,
+  RoomImageUploadValidationError,
+  validateCommittedRoomImages,
+} from '@/lib/property-generation/room-image-uploads'
 
 export const runtime = 'nodejs'
 
-const MAX_ROOM_IMAGE_BYTES = 20 * 1024 * 1024
-const MAX_ROOM_IMAGE_UPLOAD_BODY_BYTES = ROOM_IMAGE_COUNT * MAX_ROOM_IMAGE_BYTES + 2 * 1024 * 1024
 const REPLACEABLE_JOB_STATUS_VALUES = ['queued', 'failed', 'cancelled']
 const REPLACEABLE_JOB_STATUSES = new Set(REPLACEABLE_JOB_STATUS_VALUES)
 
@@ -22,10 +23,6 @@ async function getDraftId(context: RouteContext) {
     throw new Error('Invalid draft id')
   }
   return (params as Record<string, string>).draftId
-}
-
-function safeFileName(name: string) {
-  return name.replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 120)
 }
 
 function draftAccessErrorResponse(error: unknown) {
@@ -42,47 +39,6 @@ function draftAccessErrorResponse(error: unknown) {
   return null
 }
 
-function detectRoomImageContentType(bytes: Buffer) {
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return 'image/jpeg'
-  }
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47 &&
-    bytes[4] === 0x0d &&
-    bytes[5] === 0x0a &&
-    bytes[6] === 0x1a &&
-    bytes[7] === 0x0a
-  ) {
-    return 'image/png'
-  }
-  if (
-    bytes.length >= 12 &&
-    bytes.subarray(0, 4).toString('ascii') === 'RIFF' &&
-    bytes.subarray(8, 12).toString('ascii') === 'WEBP'
-  ) {
-    return 'image/webp'
-  }
-  return null
-}
-
-function isUploadBodySizeAllowed(request: NextRequest) {
-  const contentLength = request.headers.get('content-length')
-  if (!contentLength) return false
-
-  const bodyBytes = Number(contentLength)
-  return Number.isInteger(bodyBytes) && bodyBytes > 0 && bodyBytes <= MAX_ROOM_IMAGE_UPLOAD_BODY_BYTES
-}
-
-interface ValidatedRoomImage {
-  bytes: Buffer
-  contentType: string
-  fileName: string
-}
-
 interface ExistingJobRow {
   id: string
   status: string
@@ -94,7 +50,7 @@ interface JobResponseRow {
   input_image_paths: string[]
 }
 
-export async function POST(request: NextRequest, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext) {
   try {
     const draftId = await getDraftId(context)
     const supabase = createSupabaseAdminClient()
@@ -114,50 +70,22 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Room images cannot be replaced after 3D generation has started' }, { status: 409 })
     }
 
-    if (!isUploadBodySizeAllowed(request)) {
-      return NextResponse.json({ error: 'Room image upload body is too large' }, { status: 413 })
+    const payload = parseRoomImagesRequest(await request.json())
+    if (!payload) {
+      return NextResponse.json({ error: 'Invalid room image upload payload' }, { status: 400 })
     }
 
-    const formData = await request.formData()
-    const files = formData.getAll('files').filter((file): file is File => file instanceof File)
-
-    if (files.length !== ROOM_IMAGE_COUNT) {
-      return NextResponse.json({ error: `Exactly ${ROOM_IMAGE_COUNT} room images are required` }, { status: 400 })
+    if (payload.action === 'prepare') {
+      const uploads = await prepareRoomImageUploads(draftId, payload.files)
+      return NextResponse.json({ uploads })
     }
 
-    const validatedImages: ValidatedRoomImage[] = []
-    for (const file of files) {
-      if (file.size === 0) {
-        return NextResponse.json({ error: 'Room images cannot be empty' }, { status: 400 })
-      }
-      if (file.size > MAX_ROOM_IMAGE_BYTES) {
-        return NextResponse.json({ error: 'Each image must be 20MB or smaller' }, { status: 400 })
-      }
-
-      const bytes = Buffer.from(await file.arrayBuffer())
-      const contentType = detectRoomImageContentType(bytes)
-      if (!contentType) {
-        return NextResponse.json({ error: 'Only JPEG, PNG, or WebP room images are allowed' }, { status: 400 })
-      }
-
-      validatedImages.push({ bytes, contentType, fileName: file.name })
-    }
-
-    const uploadedKeys: string[] = []
-    for (const [index, image] of validatedImages.entries()) {
-      const key = createPropertyAssetKey(draftId, 'images', `${index + 1}-${randomUUID()}-${safeFileName(image.fileName)}`)
-      const uploaded = await uploadBufferToS3({
-        bytes: image.bytes,
-        key,
-        contentType: image.contentType,
-      })
-      uploadedKeys.push(uploaded.key)
-    }
+    await validateCommittedRoomImages(draftId, payload.keys)
 
     const jobPayload = {
       wallet_address: draft.wallet_address,
       status: 'queued',
-      input_image_paths: uploadedKeys,
+      input_image_paths: payload.keys,
       mirrored_asset_refs: {},
       error: null,
     }
@@ -188,6 +116,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
   } catch (error) {
     const accessResponse = draftAccessErrorResponse(error)
     if (accessResponse) return accessResponse
+    if (error instanceof RoomImageUploadValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
 
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to upload room images' },
