@@ -1,4 +1,4 @@
-import { AIInsights } from "@/types/metadata"
+import { AIInsights, PropertyWorldModel } from "@/types/metadata"
 
 export interface Property {
     id: string
@@ -15,6 +15,7 @@ export interface Property {
     tags: string[]
     tokenSymbol: string
     aiInsights?: AIInsights | null // AI-generated insights from metadata
+    worldModel?: PropertyWorldModel | null
 }
 
 export const PROPERTIES: Property[] = []

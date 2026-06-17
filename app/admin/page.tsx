@@ -138,7 +138,7 @@ function PropertyDistributionCard({ property }: { property: PropertyForDistribut
                             alt={property.name}
                             fill
                             className="object-cover"
-                            unoptimized={property.imageUrl.includes('ipfs') || property.imageUrl.includes('gateway.pinata.cloud')}
+                            unoptimized={property.imageUrl.includes('ipfs')}
                         />
                     </div>
 

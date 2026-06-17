@@ -38,7 +38,7 @@ function PropertyInvestment({ property, address }: { property: Property, address
                                 alt={property.title}
                                 fill
                                 className="object-cover"
-                                unoptimized={property.imageUrl.includes('ipfs.io') || property.imageUrl.includes('gateway.pinata.cloud')}
+                                unoptimized={property.imageUrl.includes('ipfs.io')}
                             />
                         </div>
                         <div>

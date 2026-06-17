@@ -1,7 +1,7 @@
 "use client"
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from "react"
-import { Property, PROPERTIES } from "@/data/properties"
+import { createContext, useContext, useState, type ReactNode, useEffect } from "react"
+import { Property } from "@/data/properties"
 import { usePropertyFactory } from "@/hooks/usePropertyFactory"
 import { formatUnits } from "viem"
 import { PropertyMetadata } from "@/types/metadata"
@@ -16,21 +16,56 @@ interface PropertyContextType {
     refetchProperties: () => void
 }
 
+interface ContractPropertyDetail {
+    propertyAddress: `0x${string}`
+    name: string
+    location: string
+    totalValue: bigint
+    expectedMonthlyIncome: bigint
+    metadataURI: string
+    isActive: boolean
+    fundingPercentage: bigint | number
+    investorCount: bigint | number
+}
+
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined)
+
+function toPublicAssetUrl(uri: string) {
+    return uri.startsWith('ipfs://') ? uri.replace('ipfs://', 'https://ipfs.io/ipfs/') : uri
+}
+
+function loadSavedFavorites() {
+    if (typeof window === "undefined") return []
+    const savedFavs = window.localStorage.getItem("brickfi-favorites")
+    if (!savedFavs) return []
+
+    try {
+        const parsed: unknown = JSON.parse(savedFavs)
+        return Array.isArray(parsed) && parsed.every((item): item is string => typeof item === "string") ? parsed : []
+    } catch {
+        return []
+    }
+}
 
 export function PropertyProvider({ children }: { children: ReactNode }) {
     const [properties, setProperties] = useState<Property[]>([])
-    const [favorites, setFavorites] = useState<string[]>([])
+    const [favorites, setFavorites] = useState<string[]>(loadSavedFavorites)
     const [isLoading, setIsLoading] = useState(true) // Default to true while loading blockchain data
 
     const { propertiesDetails, refetchProperties } = usePropertyFactory()
 
     // Load contract properties when available
     useEffect(() => {
-        if (propertiesDetails && Array.isArray(propertiesDetails) && propertiesDetails.length > 0) {
+        if (propertiesDetails && Array.isArray(propertiesDetails)) {
             const loadPropertiesWithMetadata = async () => {
+                if (propertiesDetails.length === 0) {
+                    setProperties([])
+                    setIsLoading(false)
+                    return
+                }
+
                 const contractProperties: Property[] = await Promise.all(
-                    propertiesDetails.map(async (detail: any) => {
+                    (propertiesDetails as ContractPropertyDetail[]).map(async (detail) => {
                         // Calculate expected monthly income from annual yield
                         const totalValue = Number(formatUnits(detail.totalValue, 6))
                         const expectedMonthlyIncome = Number(formatUnits(detail.expectedMonthlyIncome, 6))
@@ -42,12 +77,12 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
                         let description = `Property tokenized on BrickFi platform. Total value: $${totalValue.toLocaleString()}`
                         let tags: string[] = detail.isActive ? ["Active"] : ["Inactive"]
                         let aiInsights = null
+                        let worldModel = null
 
                         if (detail.metadataURI && detail.metadataURI !== "") {
                             try {
-                                // Convert ipfs:// to gateway URL - use Pinata gateway for better performance
-                                const gatewayURL = detail.metadataURI.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
-                                const response = await fetch(gatewayURL, {
+                                const metadataURL = toPublicAssetUrl(detail.metadataURI)
+                                const response = await fetch(metadataURL, {
                                     mode: 'cors',
                                     headers: {
                                         'Accept': 'application/json'
@@ -57,11 +92,9 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
                                 if (response.ok) {
                                     const metadata: PropertyMetadata = await response.json()
 
-                                    // Convert all IPFS image URIs to gateway URLs using Pinata
+                                    // Convert legacy IPFS image URIs to a public gateway URL.
                                     if (metadata.images && metadata.images.length > 0) {
-                                        images = metadata.images.map(uri =>
-                                            uri.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
-                                        )
+                                        images = metadata.images.map(toPublicAssetUrl)
                                         imageUrl = images[0] // First image as primary
                                     }
 
@@ -78,6 +111,10 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
                                     // Get AI insights if available
                                     if (metadata.aiInsights) {
                                         aiInsights = metadata.aiInsights
+                                    }
+
+                                    if (metadata.worldModel) {
+                                        worldModel = metadata.worldModel
                                     }
                                 }
                             } catch (error) {
@@ -100,6 +137,7 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
                             tags,
                             tokenSymbol: detail.name.substring(0, 3).toUpperCase(),
                             aiInsights, // Include AI insights from metadata
+                            worldModel,
                         }
                     })
                 )
@@ -112,14 +150,6 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
             loadPropertiesWithMetadata()
         }
     }, [propertiesDetails])
-
-    // Load from local storage on mount (client-side only)
-    useEffect(() => {
-        const savedFavs = localStorage.getItem("brickfi-favorites")
-        if (savedFavs) {
-            setFavorites(JSON.parse(savedFavs))
-        }
-    }, [])
 
     // Save favorites to local storage
     useEffect(() => {
